@@ -85,8 +85,9 @@ struct TranslationView: View {
         )
     }
 
-    /// 一行注一行：卡片高度锚死在识别框上，只向右生长——中译英再长也压不到下一行，
-    /// 宽过图就缩字号、再不够就截断（完整译文下方一字不少），绝不让两行糊成一团黑。
+    /// 一行注一行：玻璃高度锚死在识别框上，只向右生长——中译英再长也压不到下一行，
+    /// 宽过图就缩字号、再不够就截断（完整译文下方一字不少）。
+    /// 玻璃至少盖满整个识别框：原文被整行磨去，短译文旁不漏半截原文。
     private func glossLine(_ line: RecognizedLine, in imageSize: CGSize) -> some View {
         let box = CGRect(
             x: line.box.minX * imageSize.width,
@@ -94,28 +95,45 @@ struct TranslationView: View {
             width: line.box.width * imageSize.width,
             height: line.box.height * imageSize.height
         )
-        let height = max(box.height, 13)
+        let boxHeight = max(box.height, 13)
+        // 玻璃比识别框横向各涨 3 点吞掉字形边缘的残影；纵向只涨 1 点，贴行的玻璃才不叠出亮带
+        let bleedX: CGFloat = 3
+        let height = boxHeight + 2
+        let origin = CGPoint(x: box.minX - bleedX, y: box.midY - height / 2)
+        // 墨随纸走：浅纸黑字、深纸白字；洗色同理，把磨剩的墨痕再压淡一层
+        let ink = line.isDarkBackground ? Color.white : Color(white: 0.12)
+        let wash = line.isDarkBackground ? Color.black.opacity(0.25) : Color.white.opacity(0.45)
         return HStack(spacing: 0) {
             Text(line.translation)
                 // 字号跟着识别框走：原尺寸下这就是原文自己的大小，译文才像贴着原文的注
-                .font(.system(size: min(max(height * 0.7, 9), 24), weight: .medium))
-                .foregroundStyle(.white)
+                .font(.system(size: min(max(boxHeight * 0.7, 9), 24), weight: .medium))
+                .foregroundStyle(ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .truncationMode(.tail)
                 .padding(.horizontal, 4)
+                .frame(minWidth: box.width + bleedX * 2, alignment: .leading)
                 .frame(height: height)
-                .background(
-                    Color.black.opacity(0.8),
-                    in: RoundedRectangle(cornerRadius: 3, style: .continuous)
-                )
+                .background(wash)
+                .background(alignment: .topLeading) {
+                    // 玻璃即纸色：从模糊底板上按原位取景，浅色文档就是白毛玻璃，深色截图自然是墨玻璃
+                    if let plate = state.frostedPlate {
+                        Image(nsImage: plate)
+                            .resizable()
+                            .frame(width: imageSize.width, height: imageSize.height)
+                            .offset(x: -origin.x, y: -origin.y)
+                    } else {
+                        (line.isDarkBackground ? Color.black : Color.white).opacity(0.85)
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: min(height / 4, 6), style: .continuous))
             Spacer(minLength: 0)
         }
-        .frame(width: max(imageSize.width - box.minX, 1), alignment: .leading)
-        // 这一行的译文一到就亮起来，没到的行不留黑块
+        .frame(width: max(imageSize.width - origin.x, 1), alignment: .leading)
+        // 这一行的译文一到就亮起来，没到的行不蒙玻璃
         .opacity(line.translation.isEmpty ? 0 : 1)
         .animation(.easeOut(duration: 0.18), value: line.translation.isEmpty)
-        .offset(x: box.minX, y: box.midY - height / 2)
+        .offset(x: origin.x, y: origin.y)
     }
 
     private var content: some View {

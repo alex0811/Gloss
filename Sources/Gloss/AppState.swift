@@ -37,6 +37,8 @@ final class AppState: ObservableObject {
     @Published var translation = ""
     /// 图片模式下的识别行；译文按行号回填进来，视图把每行叠回原图的识别位置。
     @Published private(set) var imageLines: [RecognizedLine] = []
+    /// 原图磨去墨迹只剩纸色的毛玻璃底板：译文行的玻璃从这上面对位取景。与 imageLines 同源同生命周期。
+    @Published private(set) var frostedPlate: NSImage?
     @Published var status: Status = .idle
     /// 剪贴板出现了浮层尚未处理的新内容——「重新翻译」按钮亮起的依据。
     @Published private(set) var hasNewClipboard = false
@@ -98,6 +100,7 @@ final class AppState: ObservableObject {
         sourceText = ""
         sourceImage = nil
         imageLines = []
+        frostedPlate = nil
         translation = ""
         hasNewClipboard = false
         // 热键快过 0.5 秒的轮询时，这份剪贴板已经翻过了——不认领它，下一拍就会误亮「重新翻译」。
@@ -157,9 +160,9 @@ final class AppState: ObservableObject {
 
     /// 图片先在本地识别出每行文字和位置，再按行号整段翻译，译文逐行叠回原图。
     private func recognizeThenStream(_ image: NSImage) async throws {
-        let lines: [RecognizedLine]
+        let recognition: Recognition
         do {
-            lines = try await OCR.recognizeLines(in: image)
+            recognition = try await OCR.recognize(in: image)
         } catch is CancellationError {
             throw CancellationError()
         } catch {
@@ -167,12 +170,13 @@ final class AppState: ObservableObject {
             throw Failure(message: "识别失败：\(error.localizedDescription)", showSettings: false)
         }
         guard !Task.isCancelled else { return }
-        guard !lines.isEmpty else {
+        guard !recognition.lines.isEmpty else {
             throw Failure(message: "图片里没识别到文字", showSettings: false)
         }
-        imageLines = lines
+        imageLines = recognition.lines
+        frostedPlate = recognition.plate
         status = .streaming
-        try await streamLines(lines)
+        try await streamLines(recognition.lines)
     }
 
     /// 各行编号后整段发出——一次请求保住全文语境，译文流回来按行号抠出，位置仍能对回每一行。
