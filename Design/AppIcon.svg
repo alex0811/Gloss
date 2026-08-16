@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Gloss app icon master · 形状唯一来源。导出时由 Xcode/官方模板做真正的圆角遮罩。 -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#17203A"/>
+      <stop offset="1" stop-color="#0B101F"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFE29E"/>
+      <stop offset="1" stop-color="#F2A83B"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.07"/>
+      <stop offset="0.45" stop-color="#FFFFFF" stop-opacity="0.02"/>
+      <stop offset="0.46" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="glow" x="-60%" y="-120%" width="220%" height="340%">
+      <feGaussianBlur stdDeviation="26"/>
+    </filter>
+    <clipPath id="squircle">
+      <rect x="0" y="0" width="1024" height="1024" rx="229" ry="229"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#squircle)">
+    <rect width="1024" height="1024" fill="url(#bg)"/>
+    <!-- 光泽：左上斜向的一层微光，gloss 的字面义 -->
+    <rect width="1024" height="1024" fill="url(#sheen)"/>
+    <!-- 上下两条淡墨文本线 -->
+    <rect x="208" y="346" width="430" height="44" rx="22" fill="#56648A" opacity="0.9"/>
+    <rect x="208" y="634" width="520" height="44" rx="22" fill="#56648A" opacity="0.9"/>
+    <!-- 行间注：金色注线（先垫发光，再画主体） -->
+    <rect x="208" y="468" width="330" height="88" rx="44" fill="#F5B84D" opacity="0.55" filter="url(#glow)"/>
+    <rect x="208" y="468" width="330" height="88" rx="44" fill="url(#gold)"/>
+  </g>
+</svg>
