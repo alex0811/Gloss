@@ -1,8 +1,12 @@
-# Gloss
+<p align="center">
+  <img src="Design/AppIcon.svg" width="128" alt="Gloss 图标：淡墨文本线之间，一条发光的金色注线">
+</p>
 
-macOS 菜单栏翻译工具：复制文本 → 全局热键（默认 ⌥⌘T）→ 浮层流式译文。
+<h1 align="center">Gloss</h1>
 
-**gloss**，语言学术语「行间译注」——外语书页字里行间那行小字翻译；英语里同拼写的另一个词义是「光泽、润色」。项目气质见 [CLAUDE.md](CLAUDE.md)。
+<p align="center">macOS 菜单栏翻译工具：复制文本 → 全局热键（默认 ⌥⌘T）→ 浮层流式译文。</p>
+
+**gloss**，语言学术语「行间译注」——外语书页字里行间那行小字翻译；英语里同拼写的另一个词义是「光泽、润色」。图标画的就是它：两条淡墨文本线之间，一条发光的金色注线。项目气质见 [CLAUDE.md](CLAUDE.md)。
 
 ## 构建与运行
 
