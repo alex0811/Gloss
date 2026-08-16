@@ -29,7 +29,7 @@ final class PanelController {
 
     private func makePanel() -> NSPanel {
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 440, height: 320),
+            contentRect: NSRect(origin: .zero, size: TranslationView.Metrics.size(withImage: false)),
             styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -46,10 +46,11 @@ final class PanelController {
         return panel
     }
 
-    /// 视图高度是唯一事实：图片模式 400，其余 320。
+    /// 视图尺寸是唯一事实：数字只写在 TranslationView.Metrics，这里照抄一份就迟早对不上。
     private func syncContentSize() {
-        let height: CGFloat = AppState.shared.displaysSourceImage ? 400 : 320
-        panel?.setContentSize(NSSize(width: 440, height: height))
+        panel?.setContentSize(
+            TranslationView.Metrics.size(withImage: AppState.shared.displaysSourceImage)
+        )
     }
 
     /// 设置页切换「显示原图」时，正显示的浮层跟着变高矮。

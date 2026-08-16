@@ -3,11 +3,14 @@ import Foundation
 /// 唯一的翻译客户端：OpenAI 兼容协议（DeepSeek / OpenAI / Ollama / 各类中转通用），
 /// 换服务商 = 换配置，不为任何一家写专属 client。
 enum Translator {
-    static func translate(_ text: String) -> AsyncThrowingStream<String, Error> {
+    static func translate(
+        _ text: String,
+        prompt: String = systemPrompt
+    ) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    try await stream(text: text, into: continuation)
+                    try await stream(text: text, prompt: prompt, into: continuation)
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
@@ -25,6 +28,7 @@ enum Translator {
 
     private static func stream(
         text: String,
+        prompt: String,
         into continuation: AsyncThrowingStream<String, Error>.Continuation
     ) async throws {
         let model = AppConfig.model.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -36,7 +40,7 @@ enum Translator {
             "stream": true,
             "temperature": 0.2,
             "messages": [
-                ["role": "system", "content": systemPrompt],
+                ["role": "system", "content": prompt],
                 ["role": "user", "content": text],
             ],
         ]

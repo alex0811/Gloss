@@ -30,6 +30,8 @@ final class AppState: ObservableObject {
         didSet { UserDefaults.standard.set(showsSourceImage, forKey: Self.showsSourceImageKey) }
     }
     @Published var translation = ""
+    /// 图片模式下的识别行；译文按行号回填进来，视图把每行叠回原图的识别位置。
+    @Published private(set) var imageLines: [RecognizedLine] = []
     @Published var status: Status = .idle
     /// 剪贴板出现了浮层尚未处理的新内容——「重新翻译」按钮亮起的依据。
     @Published private(set) var hasNewClipboard = false
@@ -78,35 +80,50 @@ final class AppState: ObservableObject {
         streamTask?.cancel()
         sourceText = ""
         sourceImage = nil
+        imageLines = []
         translation = ""
         hasNewClipboard = false
+        // 热键快过 0.5 秒的轮询时，这份剪贴板已经翻过了——不认领它，下一拍就会误亮「重新翻译」。
+        lastChangeCount = NSPasteboard.general.changeCount
 
         switch Clipboard.read() {
         case .text(let text):
-            startTranslation(of: text)
+            sourceText = text
+            begin(.streaming) { try await self.streamText(text) }
         case .image(let image):
             sourceImage = image
-            recognizeThenTranslate(image)
+            begin(.recognizing) { try await self.recognizeThenStream(image) }
         case .empty:
-            status = .failed("剪贴板里没有文本或图片，先复制一段再按快捷键", showSettings: false)
-            panel.show()
+            present(.failed("剪贴板里没有文本或图片，先复制一段再按快捷键", showSettings: false))
         }
     }
 
-    private func startTranslation(of text: String) {
-        sourceText = text
-        status = .streaming
+    /// 出错时说什么、要不要指路去设置，由知情的那一方抛出来定，不留给各处 catch 各猜一份。
+    private struct Failure: Error {
+        let message: String
+        let showSettings: Bool
+    }
+
+    /// 面板与状态一起亮相：状态变了才值得弹面板，两件事不分家。
+    private func present(_ status: Status) {
+        self.status = status
         panel.show()
+    }
+
+    /// 所有翻译共走这一条：面板归它弹、任务归它管，取消语义与失败呈现只在这里收口。
+    /// 文本、图片各自只管「文字怎么变成状态」，控制流不再各抄一份。
+    private func begin(_ status: Status, _ work: @escaping @MainActor () async throws -> Void) {
+        present(status)
         streamTask = Task { [weak self] in
             do {
-                for try await chunk in Translator.translate(text) {
-                    guard !Task.isCancelled else { return }
-                    self?.translation += chunk
-                }
+                try await work()
                 guard !Task.isCancelled else { return }
                 self?.status = .done
             } catch is CancellationError {
                 // 主动取消不算失败
+            } catch let failure as Failure {
+                guard !Task.isCancelled else { return }
+                self?.status = .failed(failure.message, showSettings: failure.showSettings)
             } catch {
                 guard !Task.isCancelled else { return }
                 self?.status = .failed(error.localizedDescription, showSettings: true)
@@ -114,27 +131,58 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// 图片先在本地识别出文字，再交回原有翻译流。
-    private func recognizeThenTranslate(_ image: NSImage) {
-        status = .recognizing
-        panel.show()
-        streamTask = Task { [weak self] in
-            do {
-                let text = try await OCR.recognizeText(in: image)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !Task.isCancelled else { return }
-                guard !text.isEmpty else {
-                    self?.status = .failed("图片里没识别到文字", showSettings: false)
-                    return
-                }
-                self?.startTranslation(of: text)
-            } catch is CancellationError {
-                // 主动取消不算失败
-            } catch {
-                guard !Task.isCancelled else { return }
-                self?.status = .failed("识别失败：\(error.localizedDescription)", showSettings: false)
+    private func streamText(_ text: String) async throws {
+        for try await chunk in Translator.translate(text) {
+            guard !Task.isCancelled else { return }
+            translation += chunk
+        }
+    }
+
+    /// 图片先在本地识别出每行文字和位置，再按行号整段翻译，译文逐行叠回原图。
+    private func recognizeThenStream(_ image: NSImage) async throws {
+        let lines: [RecognizedLine]
+        do {
+            lines = try await OCR.recognizeLines(in: image)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            // 识别是本地的事，与服务商配置无关，别把用户往设置页支
+            throw Failure(message: "识别失败：\(error.localizedDescription)", showSettings: false)
+        }
+        guard !Task.isCancelled else { return }
+        guard !lines.isEmpty else {
+            throw Failure(message: "图片里没识别到文字", showSettings: false)
+        }
+        imageLines = lines
+        status = .streaming
+        try await streamLines(lines)
+    }
+
+    /// 各行编号后整段发出——一次请求保住全文语境，译文流回来按行号抠出，位置仍能对回每一行。
+    private func streamLines(_ lines: [RecognizedLine]) async throws {
+        var buffer = ""
+        for try await chunk in Translator.translate(LineFormat.encode(lines), prompt: LineFormat.prompt) {
+            guard !Task.isCancelled else { return }
+            buffer += chunk
+            apply(buffer, to: lines)
+        }
+        guard !Task.isCancelled else { return }
+        apply(buffer, to: lines, final: true)
+    }
+
+    /// 下方内容区永远是完整译文（只剥掉行号，模型多说的一个字不吞）；
+    /// 图上只叠对得上号的行——抠不出行号就不乱叠，宁可图上先空着。
+    private func apply(_ buffer: String, to lines: [RecognizedLine], final: Bool = false) {
+        translation = LineFormat.strip(buffer)
+        let byNumber = LineFormat.decode(buffer, count: lines.count, final: final)
+        guard !byNumber.isEmpty else { return }
+        var updated = lines
+        for (number, text) in byNumber {
+            if let index = updated.firstIndex(where: { $0.id == number }) {
+                updated[index].translation = text
             }
         }
+        imageLines = updated
     }
 
     func dismiss() {

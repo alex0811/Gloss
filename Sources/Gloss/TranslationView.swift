@@ -1,6 +1,23 @@
 import SwiftUI
 
 struct TranslationView: View {
+    /// 浮层尺寸的唯一事实：视图与 NSPanel 共用这一份，改一处两处都跟着变。
+    enum Metrics {
+        static let width: CGFloat = 440
+        static let padding: CGFloat = 16
+        /// 图片模式要同时容下原图、叠在图上的译文和下方全文，比纯文本高一截。
+        static let imageHeight: CGFloat = 470
+        static let textHeight: CGFloat = 320
+        /// 原图在浮层里最高占这么多，余下的高度留给下方完整译文。
+        static let imageMaxHeight: CGFloat = 240
+
+        static var contentWidth: CGFloat { width - padding * 2 }
+        static func height(withImage: Bool) -> CGFloat { withImage ? imageHeight : textHeight }
+        static func size(withImage: Bool) -> CGSize {
+            CGSize(width: width, height: height(withImage: withImage))
+        }
+    }
+
     @ObservedObject var state = AppState.shared
     @State private var copied = false
 
@@ -20,8 +37,12 @@ struct TranslationView: View {
             content
             footer
         }
-        .padding(16)
-        .frame(width: 440, height: state.displaysSourceImage ? 400 : 320, alignment: .topLeading)
+        .padding(Metrics.padding)
+        .frame(
+            width: Metrics.width,
+            height: Metrics.height(withImage: state.displaysSourceImage),
+            alignment: .topLeading
+        )
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -50,49 +71,67 @@ struct TranslationView: View {
         }
     }
 
-    /// 原图即原文：译文像字幕一样盖在图片底部，随流式输出长出来。
-    /// 图上最多四行，完整译文仍在下方内容区，可读可复制。
+    /// 原图即原文：译文按识别位置逐行叠回图上，随流式输出一行行亮起来，恰是行间注的样子。
+    /// 完整译文仍在下方内容区，可读可复制。
     private func stampedImage(_ image: NSImage) -> some View {
         let fitted = fittedSize(of: image)
-        return Image(nsImage: image)
-            .resizable()
-            .scaledToFit()
-            .frame(width: fitted.width, height: fitted.height)
-            .overlay(alignment: .bottom) {
-                if !state.translation.isEmpty {
-                    Text(state.translation)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.white)
-                        .lineLimit(4)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(
-                            LinearGradient(
-                                stops: [
-                                    .init(color: .black.opacity(0), location: 0),
-                                    .init(color: .black.opacity(0.78), location: 0.45),
-                                ],
-                                startPoint: .top, endPoint: .bottom
-                            )
-                        )
-                }
+        return ZStack(alignment: .topLeading) {
+            Image(nsImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(width: fitted.width, height: fitted.height)
+            ForEach(state.imageLines) { line in
+                glossLine(line, in: fitted)
             }
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.1))
-            )
+        }
+        .frame(width: fitted.width, height: fitted.height)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.1))
+        )
     }
 
-    /// 宽度撑满内容区、高度封顶 150，按原图比例反推出实际显示尺寸；
-    /// 尺寸算死了，字幕蒙层才不会盖到图外。
+    /// 一行注一行：卡片高度锚死在识别框上，只向右生长——中译英再长也压不到下一行，
+    /// 宽过图就缩字号、再不够就截断（完整译文下方一字不少），绝不让两行糊成一团黑。
+    private func glossLine(_ line: RecognizedLine, in fitted: CGSize) -> some View {
+        let box = CGRect(
+            x: line.box.minX * fitted.width,
+            y: line.box.minY * fitted.height,
+            width: line.box.width * fitted.width,
+            height: line.box.height * fitted.height
+        )
+        let height = max(box.height, 13)
+        return HStack(spacing: 0) {
+            Text(line.translation)
+                .font(.system(size: min(max(height * 0.7, 9), 14), weight: .medium))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .truncationMode(.tail)
+                .padding(.horizontal, 4)
+                .frame(height: height)
+                .background(
+                    Color.black.opacity(0.8),
+                    in: RoundedRectangle(cornerRadius: 3, style: .continuous)
+                )
+            Spacer(minLength: 0)
+        }
+        .frame(width: max(fitted.width - box.minX, 1), alignment: .leading)
+        // 这一行的译文一到就亮起来，没到的行不留黑块
+        .opacity(line.translation.isEmpty ? 0 : 1)
+        .animation(.easeOut(duration: 0.18), value: line.translation.isEmpty)
+        .offset(x: box.minX, y: box.midY - height / 2)
+    }
+
+    /// 宽度撑满内容区、高度封顶，按原图比例反推出实际显示尺寸；
+    /// 尺寸算死了，叠在图上的译文才落得准、跑不出图外。
     private func fittedSize(of image: NSImage) -> CGSize {
         let aspect = max(image.size.width, 1) / max(image.size.height, 1)
-        var width = 408.0
+        var width = Metrics.contentWidth
         var height = width / aspect
-        if height > 150 {
-            height = 150
+        if height > Metrics.imageMaxHeight {
+            height = Metrics.imageMaxHeight
             width = height * aspect
         }
         return CGSize(width: width, height: height)
