@@ -1,10 +1,5 @@
 import Foundation
 
-struct TranslatorError: LocalizedError {
-    let message: String
-    var errorDescription: String? { message }
-}
-
 /// 唯一的翻译客户端：OpenAI 兼容协议（DeepSeek / OpenAI / Ollama / 各类中转通用），
 /// 换服务商 = 换配置，不为任何一家写专属 client。
 enum Translator {
@@ -32,21 +27,10 @@ enum Translator {
         text: String,
         into continuation: AsyncThrowingStream<String, Error>.Continuation
     ) async throws {
-        let base = AppConfig.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let model = AppConfig.model.trimmingCharacters(in: .whitespacesAndNewlines)
-        let key = AppConfig.apiKey
-        guard !base.isEmpty, !model.isEmpty, !key.isEmpty else {
-            throw TranslatorError(message: "未完成配置：请在设置里填入 Base URL、模型和 API Key")
+        guard !model.isEmpty else {
+            throw APIError(message: "未完成配置：请在设置里选一个模型")
         }
-        let endpoint = base.hasSuffix("/") ? base + "chat/completions" : base + "/chat/completions"
-        guard let url = URL(string: endpoint) else {
-            throw TranslatorError(message: "Base URL 无效：\(base)")
-        }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         let body: [String: Any] = [
             "model": model,
             "stream": true,
@@ -56,11 +40,11 @@ enum Translator {
                 ["role": "user", "content": text],
             ],
         ]
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
+        let request = try OpenAIAPI.request("chat/completions", body: body)
         let (bytes, response) = try await URLSession.shared.bytes(for: request)
         guard let http = response as? HTTPURLResponse else {
-            throw TranslatorError(message: "服务未返回有效响应")
+            throw APIError(message: "服务未返回有效响应")
         }
         guard http.statusCode == 200 else {
             var raw = ""
@@ -68,7 +52,7 @@ enum Translator {
                 raw += line
                 if raw.count > 2000 { break }
             }
-            throw TranslatorError(message: "HTTP \(http.statusCode)：\(apiErrorMessage(from: raw) ?? raw)")
+            throw OpenAIAPI.failure(status: http.statusCode, body: raw)
         }
 
         for try await line in bytes.lines {
@@ -84,14 +68,5 @@ enum Translator {
             else { continue }
             continuation.yield(content)
         }
-    }
-
-    private static func apiErrorMessage(from raw: String) -> String? {
-        guard let data = raw.data(using: .utf8),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let error = object["error"] as? [String: Any],
-              let message = error["message"] as? String
-        else { return nil }
-        return message
     }
 }
