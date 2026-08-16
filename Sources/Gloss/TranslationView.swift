@@ -1,31 +1,15 @@
 import SwiftUI
 
+/// 尺寸的唯一事实在 PanelLayout：视图与 NSPanel 都读 AppState.layout，这里不自己算大小。
 struct TranslationView: View {
-    /// 浮层尺寸的唯一事实：视图与 NSPanel 共用这一份，改一处两处都跟着变。
-    enum Metrics {
-        static let width: CGFloat = 440
-        static let padding: CGFloat = 16
-        /// 图片模式要同时容下原图、叠在图上的译文和下方全文，比纯文本高一截。
-        static let imageHeight: CGFloat = 470
-        static let textHeight: CGFloat = 320
-        /// 原图在浮层里最高占这么多，余下的高度留给下方完整译文。
-        static let imageMaxHeight: CGFloat = 240
-
-        static var contentWidth: CGFloat { width - padding * 2 }
-        static func height(withImage: Bool) -> CGFloat { withImage ? imageHeight : textHeight }
-        static func size(withImage: Bool) -> CGSize {
-            CGSize(width: width, height: height(withImage: withImage))
-        }
-    }
-
     @ObservedObject var state = AppState.shared
     @State private var copied = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
-            if let image = state.sourceImage, state.showsSourceImage {
-                stampedImage(image)
+            if let image = state.sourceImage, let area = state.layout.image {
+                stampedImage(image, in: area)
                 Divider()
             } else if state.sourceImage == nil, !state.sourceText.isEmpty {
                 Text(state.sourceText)
@@ -37,10 +21,10 @@ struct TranslationView: View {
             content
             footer
         }
-        .padding(Metrics.padding)
+        .padding(PanelLayout.padding)
         .frame(
-            width: Metrics.width,
-            height: Metrics.height(withImage: state.displaysSourceImage),
+            width: state.layout.size.width,
+            height: state.layout.size.height,
             alignment: .topLeading
         )
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -71,20 +55,29 @@ struct TranslationView: View {
         }
     }
 
-    /// 原图即原文：译文按识别位置逐行叠回图上，随流式输出一行行亮起来，恰是行间注的样子。
+    /// 原图即原文：按原尺寸铺开（不缩不放，就是它在屏幕上原本的大小），译文按识别位置逐行叠回图上，
+    /// 随流式输出一行行亮起来，恰是行间注的样子。浮层跟着图撑大；图大过屏幕封顶时才在图区里滚动。
     /// 完整译文仍在下方内容区，可读可复制。
-    private func stampedImage(_ image: NSImage) -> some View {
-        let fitted = fittedSize(of: image)
-        return ZStack(alignment: .topLeading) {
-            Image(nsImage: image)
-                .resizable()
-                .scaledToFit()
-                .frame(width: fitted.width, height: fitted.height)
-            ForEach(state.imageLines) { line in
-                glossLine(line, in: fitted)
+    private func stampedImage(_ image: NSImage, in area: PanelLayout.ImageArea) -> some View {
+        // 只有真的装不下的那一轴才开滚动，装得下的一轴不留橡皮筋回弹
+        var axes: Axis.Set = []
+        if area.content.width > area.viewport.width { axes.insert(.horizontal) }
+        if area.content.height > area.viewport.height { axes.insert(.vertical) }
+
+        return ScrollView(axes) {
+            ZStack(alignment: .topLeading) {
+                Image(nsImage: image)
+                    .resizable()
+                    .frame(width: area.content.width, height: area.content.height)
+                ForEach(state.imageLines) { line in
+                    glossLine(line, in: area.content)
+                }
             }
+            .frame(width: area.content.width, height: area.content.height, alignment: .topLeading)
         }
-        .frame(width: fitted.width, height: fitted.height)
+        // 换一张图就回到左上角：浮层是常驻的，不重置会带着上一张的滚动位置开场
+        .id(ObjectIdentifier(image))
+        .frame(width: area.viewport.width, height: area.viewport.height)
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -94,17 +87,18 @@ struct TranslationView: View {
 
     /// 一行注一行：卡片高度锚死在识别框上，只向右生长——中译英再长也压不到下一行，
     /// 宽过图就缩字号、再不够就截断（完整译文下方一字不少），绝不让两行糊成一团黑。
-    private func glossLine(_ line: RecognizedLine, in fitted: CGSize) -> some View {
+    private func glossLine(_ line: RecognizedLine, in imageSize: CGSize) -> some View {
         let box = CGRect(
-            x: line.box.minX * fitted.width,
-            y: line.box.minY * fitted.height,
-            width: line.box.width * fitted.width,
-            height: line.box.height * fitted.height
+            x: line.box.minX * imageSize.width,
+            y: line.box.minY * imageSize.height,
+            width: line.box.width * imageSize.width,
+            height: line.box.height * imageSize.height
         )
         let height = max(box.height, 13)
         return HStack(spacing: 0) {
             Text(line.translation)
-                .font(.system(size: min(max(height * 0.7, 9), 14), weight: .medium))
+                // 字号跟着识别框走：原尺寸下这就是原文自己的大小，译文才像贴着原文的注
+                .font(.system(size: min(max(height * 0.7, 9), 24), weight: .medium))
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
@@ -117,24 +111,11 @@ struct TranslationView: View {
                 )
             Spacer(minLength: 0)
         }
-        .frame(width: max(fitted.width - box.minX, 1), alignment: .leading)
+        .frame(width: max(imageSize.width - box.minX, 1), alignment: .leading)
         // 这一行的译文一到就亮起来，没到的行不留黑块
         .opacity(line.translation.isEmpty ? 0 : 1)
         .animation(.easeOut(duration: 0.18), value: line.translation.isEmpty)
         .offset(x: box.minX, y: box.midY - height / 2)
-    }
-
-    /// 宽度撑满内容区、高度封顶，按原图比例反推出实际显示尺寸；
-    /// 尺寸算死了，叠在图上的译文才落得准、跑不出图外。
-    private func fittedSize(of image: NSImage) -> CGSize {
-        let aspect = max(image.size.width, 1) / max(image.size.height, 1)
-        var width = Metrics.contentWidth
-        var height = width / aspect
-        if height > Metrics.imageMaxHeight {
-            height = Metrics.imageMaxHeight
-            width = height * aspect
-        }
-        return CGSize(width: width, height: height)
     }
 
     private var content: some View {

@@ -11,11 +11,18 @@ final class PanelController {
 
     var isVisible: Bool { panel?.isVisible ?? false }
 
+    /// 浮层归宿的屏幕：正显示就是它所在的屏，还没弹出就是即将弹出的（鼠标所在）屏。
+    /// 图片模式算布局要按这块屏的大小和缩放来。
+    var targetScreen: NSScreen? {
+        if let panel, panel.isVisible { return panel.screen ?? PanelScreen.current }
+        return PanelScreen.current
+    }
+
     func show() {
         let panel = self.panel ?? makePanel()
         self.panel = panel
         observeSizeChanges()
-        syncContentSize()
+        apply(AppState.shared.layout)
         // 常驻中的浮层可能已被拖走，刷新内容时不挪窝；只有新弹出才贴鼠标。
         if !panel.isVisible {
             position(panel)
@@ -29,7 +36,7 @@ final class PanelController {
 
     private func makePanel() -> NSPanel {
         let panel = NSPanel(
-            contentRect: NSRect(origin: .zero, size: TranslationView.Metrics.size(withImage: false)),
+            contentRect: NSRect(origin: .zero, size: PanelLayout.text.size),
             styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -46,31 +53,40 @@ final class PanelController {
         return panel
     }
 
-    /// 视图尺寸是唯一事实：数字只写在 TranslationView.Metrics，这里照抄一份就迟早对不上。
-    private func syncContentSize() {
-        panel?.setContentSize(
-            TranslationView.Metrics.size(withImage: AppState.shared.displaysSourceImage)
-        )
+    /// 尺寸的唯一事实在 PanelLayout，这里只负责把它落到 NSPanel 上。
+    /// 锚住左上角再改尺寸——setContentSize 锚的是左下，高度一变浮层就上蹿下跳；改完整体收回屏幕内。
+    private func apply(_ layout: PanelLayout) {
+        guard let panel else { return }
+        let topLeft = NSPoint(x: panel.frame.minX, y: panel.frame.maxY)
+        panel.setContentSize(layout.size)
+        panel.setFrameTopLeftPoint(topLeft)
+        keepOnScreen(panel)
     }
 
-    /// 设置页切换「显示原图」时，正显示的浮层跟着变高矮。
+    /// 布局变了（换图、设置页切开关），正显示的浮层跟着变大小。
     /// 订阅只能放在 show() 里——init 期间 AppState.shared 还在构造，反向访问会重入。
     private func observeSizeChanges() {
         guard sizeCancellable == nil else { return }
-        sizeCancellable = AppState.shared.$showsSourceImage
+        sizeCancellable = AppState.shared.$layout
             .dropFirst()
+            .removeDuplicates()
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                Task { @MainActor in self?.syncContentSize() }
+            .sink { [weak self] layout in
+                Task { @MainActor in self?.apply(layout) }
             }
     }
 
-    /// 出现在鼠标附近，并整体收进当前屏幕的可见区域。
+    /// 新弹出时出现在鼠标附近。
     private func position(_ panel: NSPanel) {
         let mouse = NSEvent.mouseLocation
-        let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
-        guard let visible = screen?.visibleFrame else { return }
-        var origin = NSPoint(x: mouse.x + 12, y: mouse.y - panel.frame.height - 12)
+        panel.setFrameTopLeftPoint(NSPoint(x: mouse.x + 12, y: mouse.y - 12))
+        keepOnScreen(panel)
+    }
+
+    /// 整体收进所在屏幕的可见区域。
+    private func keepOnScreen(_ panel: NSPanel) {
+        guard let visible = (panel.screen ?? PanelScreen.current)?.visibleFrame else { return }
+        var origin = panel.frame.origin
         origin.x = min(max(origin.x, visible.minX + 8), visible.maxX - panel.frame.width - 8)
         origin.y = min(max(origin.y, visible.minY + 8), visible.maxY - panel.frame.height - 8)
         panel.setFrameOrigin(origin)

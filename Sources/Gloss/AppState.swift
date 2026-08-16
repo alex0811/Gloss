@@ -23,11 +23,16 @@ final class AppState: ObservableObject {
 
     @Published var sourceText = ""
     /// 剪贴板是图片时保留原图，结果区显示它并把译文盖上；文本翻译则为 nil。
-    @Published var sourceImage: NSImage?
+    @Published var sourceImage: NSImage? {
+        didSet { updateLayout() }
+    }
     /// 设置页开关：图片翻译是否显示原图，关掉只看译文。默认开。
     @Published var showsSourceImage =
         UserDefaults.standard.object(forKey: AppState.showsSourceImageKey) as? Bool ?? true {
-        didSet { UserDefaults.standard.set(showsSourceImage, forKey: Self.showsSourceImageKey) }
+        didSet {
+            UserDefaults.standard.set(showsSourceImage, forKey: Self.showsSourceImageKey)
+            updateLayout()
+        }
     }
     @Published var translation = ""
     /// 图片模式下的识别行；译文按行号回填进来，视图把每行叠回原图的识别位置。
@@ -35,9 +40,8 @@ final class AppState: ObservableObject {
     @Published var status: Status = .idle
     /// 剪贴板出现了浮层尚未处理的新内容——「重新翻译」按钮亮起的依据。
     @Published private(set) var hasNewClipboard = false
-
-    /// 此刻浮层是否按图片模式布局（有原图且开关开着）——视图高度与面板尺寸共用的判定。
-    var displaysSourceImage: Bool { sourceImage != nil && showsSourceImage }
+    /// 浮层此刻的布局：视图和面板都读它。跟着 sourceImage / showsSourceImage 变，不单独手改。
+    @Published private(set) var layout: PanelLayout = .text
 
     private static let showsSourceImageKey = "showsSourceImage"
 
@@ -57,6 +61,19 @@ final class AppState: ObservableObject {
             .sink { [weak self] _ in
                 Task { @MainActor in self?.checkClipboard() }
             }
+    }
+
+    /// 布局跟着「有没有图、开关开没开」走：图片模式按原图撑大浮层，其余回到文本模式定尺寸。
+    private func updateLayout() {
+        guard let image = sourceImage, showsSourceImage else {
+            layout = .text
+            return
+        }
+        let screen = panel.targetScreen
+        layout = .image(
+            content: PanelLayout.naturalSize(of: image, scale: screen?.backingScaleFactor ?? 2),
+            screen: screen?.visibleFrame.size ?? CGSize(width: 1280, height: 800)
+        )
     }
 
     /// 只有「面板处理过之后又复制了新东西」才点亮按钮；自己写回的译文不算。
