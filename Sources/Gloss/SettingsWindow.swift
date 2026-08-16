@@ -28,6 +28,7 @@ final class SettingsWindowController {
 
 struct SettingsView: View {
     @ObservedObject private var store = ProviderStore.shared
+    @ObservedObject private var appState = AppState.shared
     @State private var apiKey = ""
     @State private var keyJustSaved = false
     @State private var models: [String] = []
@@ -89,6 +90,9 @@ struct SettingsView: View {
             }
             Section("快捷键") {
                 KeyboardShortcuts.Recorder("翻译剪贴板", name: .translateClipboard)
+            }
+            Section("显示") {
+                Toggle("图片翻译显示原图", isOn: $appState.showsSourceImage)
             }
             Section {
                 Text("名称、Base URL 与模型即存即用；API Key 在「保存」或刷新模型时存入 Keychain，"

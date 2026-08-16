@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 /// 非激活浮动面板：不抢当前 App 的焦点（气质准则「如行间注」）。
@@ -7,12 +8,15 @@ import SwiftUI
 final class PanelController {
     private var panel: NSPanel?
     private var clickMonitor: Any?
+    private var sizeCancellable: AnyCancellable?
 
     var isVisible: Bool { panel?.isVisible ?? false }
 
     func show() {
         let panel = self.panel ?? makePanel()
         self.panel = panel
+        observeSizeChanges()
+        syncContentSize()
         position(panel)
         panel.orderFrontRegardless()
         installClickMonitor()
@@ -40,6 +44,24 @@ final class PanelController {
         panel.isMovableByWindowBackground = true
         panel.contentView = NSHostingView(rootView: TranslationView())
         return panel
+    }
+
+    /// 视图高度是唯一事实：图片模式 400，其余 320。
+    private func syncContentSize() {
+        let height: CGFloat = AppState.shared.displaysSourceImage ? 400 : 320
+        panel?.setContentSize(NSSize(width: 440, height: height))
+    }
+
+    /// 设置页切换「显示原图」时，正显示的浮层跟着变高矮。
+    /// 订阅只能放在 show() 里——init 期间 AppState.shared 还在构造，反向访问会重入。
+    private func observeSizeChanges() {
+        guard sizeCancellable == nil else { return }
+        sizeCancellable = AppState.shared.$showsSourceImage
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                Task { @MainActor in self?.syncContentSize() }
+            }
     }
 
     /// 出现在鼠标附近，并整体收进当前屏幕的可见区域。

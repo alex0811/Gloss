@@ -7,7 +7,10 @@ struct TranslationView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
-            if !state.sourceText.isEmpty {
+            if let image = state.sourceImage, state.showsSourceImage {
+                stampedImage(image)
+                Divider()
+            } else if state.sourceImage == nil, !state.sourceText.isEmpty {
                 Text(state.sourceText)
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
@@ -18,7 +21,7 @@ struct TranslationView: View {
             footer
         }
         .padding(16)
-        .frame(width: 440, height: 320, alignment: .topLeading)
+        .frame(width: 440, height: state.displaysSourceImage ? 400 : 320, alignment: .topLeading)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -45,6 +48,54 @@ struct TranslationView: View {
             }
             .buttonStyle(.plain)
         }
+    }
+
+    /// 原图即原文：译文像字幕一样盖在图片底部，随流式输出长出来。
+    /// 图上最多四行，完整译文仍在下方内容区，可读可复制。
+    private func stampedImage(_ image: NSImage) -> some View {
+        let fitted = fittedSize(of: image)
+        return Image(nsImage: image)
+            .resizable()
+            .scaledToFit()
+            .frame(width: fitted.width, height: fitted.height)
+            .overlay(alignment: .bottom) {
+                if !state.translation.isEmpty {
+                    Text(state.translation)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.white)
+                        .lineLimit(4)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .black.opacity(0), location: 0),
+                                    .init(color: .black.opacity(0.78), location: 0.45),
+                                ],
+                                startPoint: .top, endPoint: .bottom
+                            )
+                        )
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.1))
+            )
+    }
+
+    /// 宽度撑满内容区、高度封顶 150，按原图比例反推出实际显示尺寸；
+    /// 尺寸算死了，字幕蒙层才不会盖到图外。
+    private func fittedSize(of image: NSImage) -> CGSize {
+        let aspect = max(image.size.width, 1) / max(image.size.height, 1)
+        var width = 408.0
+        var height = width / aspect
+        if height > 150 {
+            height = 150
+            width = height * aspect
+        }
+        return CGSize(width: width, height: height)
     }
 
     private var content: some View {

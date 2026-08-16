@@ -22,8 +22,20 @@ final class AppState: ObservableObject {
     }
 
     @Published var sourceText = ""
+    /// 剪贴板是图片时保留原图，结果区显示它并把译文盖上；文本翻译则为 nil。
+    @Published var sourceImage: NSImage?
+    /// 设置页开关：图片翻译是否显示原图，关掉只看译文。默认开。
+    @Published var showsSourceImage =
+        UserDefaults.standard.object(forKey: AppState.showsSourceImageKey) as? Bool ?? true {
+        didSet { UserDefaults.standard.set(showsSourceImage, forKey: Self.showsSourceImageKey) }
+    }
     @Published var translation = ""
     @Published var status: Status = .idle
+
+    /// 此刻浮层是否按图片模式布局（有原图且开关开着）——视图高度与面板尺寸共用的判定。
+    var displaysSourceImage: Bool { sourceImage != nil && showsSourceImage }
+
+    private static let showsSourceImageKey = "showsSourceImage"
 
     private let panel = PanelController()
     private var streamTask: Task<Void, Never>?
@@ -46,12 +58,14 @@ final class AppState: ObservableObject {
     func translateClipboard() {
         streamTask?.cancel()
         sourceText = ""
+        sourceImage = nil
         translation = ""
 
         switch Clipboard.read() {
         case .text(let text):
             startTranslation(of: text)
         case .image(let image):
+            sourceImage = image
             recognizeThenTranslate(image)
         case .empty:
             status = .failed("剪贴板里没有文本或图片，先复制一段再按快捷键", showSettings: false)
