@@ -31,6 +31,8 @@ final class AppState: ObservableObject {
     }
     @Published var translation = ""
     @Published var status: Status = .idle
+    /// 剪贴板出现了浮层尚未处理的新内容——「重新翻译」按钮亮起的依据。
+    @Published private(set) var hasNewClipboard = false
 
     /// 此刻浮层是否按图片模式布局（有原图且开关开着）——视图高度与面板尺寸共用的判定。
     var displaysSourceImage: Bool { sourceImage != nil && showsSourceImage }
@@ -39,11 +41,28 @@ final class AppState: ObservableObject {
 
     private let panel = PanelController()
     private var streamTask: Task<Void, Never>?
+    /// 剪贴板版本号：轮询比对它，比内容哈希便宜也可靠。
+    private var lastChangeCount = 0
+    private var clipboardWatcher: AnyCancellable?
 
     private init() {
         KeyboardShortcuts.onKeyUp(for: .translateClipboard) { [weak self] in
             self?.hotkeyPressed()
         }
+        lastChangeCount = NSPasteboard.general.changeCount
+        clipboardWatcher = Timer.publish(every: 0.5, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                Task { @MainActor in self?.checkClipboard() }
+            }
+    }
+
+    /// 只有「面板处理过之后又复制了新东西」才点亮按钮；自己写回的译文不算。
+    private func checkClipboard() {
+        let count = NSPasteboard.general.changeCount
+        guard count != lastChangeCount else { return }
+        lastChangeCount = count
+        hasNewClipboard = true
     }
 
     /// 热键是开关：浮层可见时按下即收起，否则翻译当前剪贴板。
@@ -60,6 +79,7 @@ final class AppState: ObservableObject {
         sourceText = ""
         sourceImage = nil
         translation = ""
+        hasNewClipboard = false
 
         switch Clipboard.read() {
         case .text(let text):
@@ -126,5 +146,7 @@ final class AppState: ObservableObject {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(translation, forType: .string)
+        // 复制的是译文本身，不算新内容，别把「重新翻译」点亮。
+        lastChangeCount = pasteboard.changeCount
     }
 }

@@ -140,6 +140,13 @@ struct TranslationView: View {
                 EmptyView()
             }
             Spacer()
+            Button {
+                state.translateClipboard()
+            } label: {
+                Label("重新翻译", systemImage: "arrow.triangle.2.circlepath")
+            }
+            .controlSize(.small)
+            .disabled(!state.hasNewClipboard)
             Button(copied ? "已复制" : "复制译文") {
                 AppState.shared.copyTranslation()
                 copied = true

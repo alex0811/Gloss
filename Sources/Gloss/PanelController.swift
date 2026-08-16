@@ -3,11 +3,10 @@ import Combine
 import SwiftUI
 
 /// 非激活浮动面板：不抢当前 App 的焦点（气质准则「如行间注」）。
-/// 关闭方式：点浮层外任意处 / 再按一次热键 / 浮层右上角 ×。
+/// 常驻：点击其他地方不收起。关闭方式：再按一次热键 / 浮层右上角 ×。
 @MainActor
 final class PanelController {
     private var panel: NSPanel?
-    private var clickMonitor: Any?
     private var sizeCancellable: AnyCancellable?
 
     var isVisible: Bool { panel?.isVisible ?? false }
@@ -17,14 +16,15 @@ final class PanelController {
         self.panel = panel
         observeSizeChanges()
         syncContentSize()
-        position(panel)
+        // 常驻中的浮层可能已被拖走，刷新内容时不挪窝；只有新弹出才贴鼠标。
+        if !panel.isVisible {
+            position(panel)
+        }
         panel.orderFrontRegardless()
-        installClickMonitor()
     }
 
     func hide() {
         panel?.orderOut(nil)
-        removeClickMonitor()
     }
 
     private func makePanel() -> NSPanel {
@@ -73,20 +73,5 @@ final class PanelController {
         origin.x = min(max(origin.x, visible.minX + 8), visible.maxX - panel.frame.width - 8)
         origin.y = min(max(origin.y, visible.minY + 8), visible.maxY - panel.frame.height - 8)
         panel.setFrameOrigin(origin)
-    }
-
-    /// 全局鼠标监听只收到其他 App 的点击（点浮层自身不会触发），天然实现「点外面即关」。
-    private func installClickMonitor() {
-        removeClickMonitor()
-        clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { _ in
-            Task { @MainActor in AppState.shared.dismiss() }
-        }
-    }
-
-    private func removeClickMonitor() {
-        if let monitor = clickMonitor {
-            NSEvent.removeMonitor(monitor)
-            clickMonitor = nil
-        }
     }
 }
