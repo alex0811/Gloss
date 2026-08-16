@@ -68,6 +68,12 @@ struct TranslationView: View {
     private var footer: some View {
         HStack(spacing: 8) {
             switch state.status {
+            case .recognizing:
+                ProgressView()
+                    .controlSize(.small)
+                Text("识别图片文字…")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             case .streaming:
                 ProgressView()
                     .controlSize(.small)
