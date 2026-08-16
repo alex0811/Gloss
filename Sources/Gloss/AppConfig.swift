@@ -1,23 +1,18 @@
 import Foundation
 
-/// UserDefaults key 的单一来源（设置界面 @AppStorage 与读取方共用）。
-enum ConfigKey {
-    static let baseURL = "baseURL"
-    static let model = "model"
-}
-
+/// 网络层读配置的门面：永远读「当前启用」的服务商档案。
+/// Translator / ModelCatalog / OpenAIAPI 只认这三个值，不感知多档案的存在。
 enum AppConfig {
-    private static var defaults: UserDefaults { .standard }
-
     static var baseURL: String {
-        defaults.string(forKey: ConfigKey.baseURL) ?? ""
+        ProviderRepo.active()?.baseURL ?? ""
     }
 
     static var model: String {
-        defaults.string(forKey: ConfigKey.model) ?? ""
+        ProviderRepo.active()?.model ?? ""
     }
 
     static var apiKey: String {
-        KeychainStore.read() ?? ""
+        guard let provider = ProviderRepo.active() else { return "" }
+        return KeychainStore.read(account: provider.keychainAccount) ?? ""
     }
 }
