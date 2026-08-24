@@ -89,13 +89,8 @@ struct SettingsView: View {
                 }
             }
             Section("语言") {
-                Picker("原文", selection: $appState.sourceLanguage) {
+                Picker("译成", selection: $appState.targetLanguage) {
                     ForEach(Language.allCases) { language in
-                        Text(language.name).tag(language)
-                    }
-                }
-                Picker("译文", selection: $appState.targetLanguage) {
-                    ForEach(Language.targets) { language in
                         Text(language.name).tag(language)
                     }
                 }

@@ -34,7 +34,7 @@ struct TranslationView: View {
         )
     }
 
-    /// 金色注线即 logo。
+    /// 金色注线即 logo。语言在设置里定，不占浮层——工具是配角。
     private var header: some View {
         HStack {
             Capsule()
@@ -182,7 +182,7 @@ struct TranslationView: View {
                 Label("重新翻译", systemImage: "arrow.triangle.2.circlepath")
             }
             .controlSize(.small)
-            .disabled(!state.isStale)
+            .disabled(!state.hasNewClipboard)
             Button(copied ? "已复制" : "复制译文") {
                 AppState.shared.copyTranslation()
                 copied = true

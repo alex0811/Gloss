@@ -36,7 +36,8 @@ enum OCR {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = true
-        request.recognitionLanguages = recognitionLanguages
+        // 原文语种是模型的事，Gloss 不问；识别这一步同样交给 Vision 自动判
+        request.automaticallyDetectsLanguage = true
 
         let handler = VNImageRequestHandler(cgImage: cgImage)
         try handler.perform([request])
@@ -66,19 +67,6 @@ enum OCR {
             lines: lines,
             plate: lines.isEmpty ? nil : plate(from: cgImage, boxes: lines.map(\.box))
         )
-    }
-
-    /// 认哪些语种跟着「原文语言」走（数组顺序即优先级），源语言之后再垫上英语——
-    /// 截图里总混着拉丁字母（品牌名、代码、按钮）。选「自动检测」则把认得的语种全摆上。
-    private static var recognitionLanguages: [String] {
-        guard let source = LanguagePref.source.visionCode else {
-            return Language.allCases.compactMap(\.visionCode)
-        }
-        var codes = [source]
-        if let english = Language.english.visionCode, english != source {
-            codes.append(english)
-        }
-        return codes
     }
 
     /// 一行底下的纸是深是浅：识别框裁下来缩成一小把灰度像素取中位数。

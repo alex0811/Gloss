@@ -34,17 +34,12 @@ final class AppState: ObservableObject {
             updateLayout()
         }
     }
-    /// 语言对：原文 → 译文（默认见 LanguagePref）。设置页写它，翻译与识别从 LanguagePref 读。
-    @Published var sourceLanguage = LanguagePref.source {
-        didSet {
-            LanguagePref.source = sourceLanguage
-            languagesChanged()
-        }
-    }
+    /// 译成什么语言（默认见 LanguagePref）。设置页写它，翻译从 LanguagePref 读。
     @Published var targetLanguage = LanguagePref.target {
         didSet {
+            guard targetLanguage != oldValue else { return }
             LanguagePref.target = targetLanguage
-            languagesChanged()
+            targetLanguageChanged()
         }
     }
     @Published var translation = ""
@@ -53,9 +48,8 @@ final class AppState: ObservableObject {
     /// 原图磨去墨迹只剩纸色的毛玻璃底板：译文行的玻璃从这上面对位取景。与 imageLines 同源同生命周期。
     @Published private(set) var frostedPlate: NSImage?
     @Published var status: Status = .idle
-    /// 眼下这份译文是否已过期——「重新翻译」按钮亮起的依据。
-    /// 两种过期：剪贴板换了新内容、语言对改了。
-    @Published private(set) var isStale = false
+    /// 剪贴板出现了浮层尚未处理的新内容——「重新翻译」按钮亮起的依据。
+    @Published private(set) var hasNewClipboard = false
     /// 浮层此刻的布局：视图和面板都读它。跟着 sourceImage / showsSourceImage 变，不单独手改。
     @Published private(set) var layout: PanelLayout = .text
 
@@ -92,9 +86,37 @@ final class AppState: ObservableObject {
         )
     }
 
-    /// 语言换了，手边这份译文就过期了——不必重新复制，「重新翻译」直接可按。
-    private func languagesChanged() {
-        isStale = true
+    /// 设置里换了目标语言：眼下这份原文就地重翻，不必重新复制、也不必再按一次按钮。
+    /// 浮层没开着就什么都不做——下次热键自然用新语言。
+    private func targetLanguageChanged() {
+        guard panel.isVisible else { return }
+        retranslateCurrent()
+    }
+
+    /// 重翻眼下这份原文——不是剪贴板此刻的内容（那可能早换了）。
+    /// 正因如此不碰 hasNewClipboard / lastChangeCount：等着被翻的新剪贴板还等着，按钮该亮照亮。
+    private func retranslateCurrent() {
+        if !imageLines.isEmpty {
+            // 图片连识别都不必重跑：行还在，清掉旧译文换门语言再发一次即可
+            let lines = imageLines.map { line -> RecognizedLine in
+                var line = line
+                line.translation = ""
+                return line
+            }
+            imageLines = lines
+            restream { try await self.streamLines(lines) }
+        } else if !sourceText.isEmpty {
+            let text = sourceText
+            restream { try await self.streamText(text) }
+        }
+        // 识别还没出结果时两边都空：什么都不做——那次请求发出时自会用上新语言
+    }
+
+    /// 掐掉正在流的那次，清空译文，从头再流一遍。
+    private func restream(_ work: @escaping @MainActor () async throws -> Void) {
+        streamTask?.cancel()
+        translation = ""
+        begin(.streaming, work)
     }
 
     /// 只有「面板处理过之后又复制了新东西」才点亮按钮；自己写回的译文不算。
@@ -102,7 +124,7 @@ final class AppState: ObservableObject {
         let count = NSPasteboard.general.changeCount
         guard count != lastChangeCount else { return }
         lastChangeCount = count
-        isStale = true
+        hasNewClipboard = true
     }
 
     /// 热键是开关：浮层可见时按下即收起，否则翻译当前剪贴板。
@@ -121,7 +143,7 @@ final class AppState: ObservableObject {
         imageLines = []
         frostedPlate = nil
         translation = ""
-        isStale = false
+        hasNewClipboard = false
         // 热键快过 0.5 秒的轮询时，这份剪贴板已经翻过了——不认领它，下一拍就会误亮「重新翻译」。
         lastChangeCount = NSPasteboard.general.changeCount
 
