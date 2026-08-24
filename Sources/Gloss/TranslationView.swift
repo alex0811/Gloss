@@ -136,22 +136,20 @@ struct TranslationView: View {
         .offset(x: origin.x, y: origin.y)
     }
 
+    /// 完整译文（出错时是错误原文，同一块地方、同样能选中带走——「不吞错误」）。
+    /// 拖着鼠标就能框选一段，不必整段复制。
     private var content: some View {
-        ScrollView {
-            Group {
-                if case .failed(let message, _) = state.status {
-                    Text(message)
-                        .font(.system(size: 13))
-                        .foregroundStyle(.red)
-                } else {
-                    Text(state.translation)
-                        .font(.system(size: 14))
-                        .textSelection(.enabled)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .frame(maxHeight: .infinity)
+        SelectableText(
+            text: failureMessage ?? state.translation,
+            font: .systemFont(ofSize: failureMessage == nil ? 14 : 13),
+            color: failureMessage == nil ? .labelColor : .systemRed
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var failureMessage: String? {
+        if case .failed(let message, _) = state.status { return message }
+        return nil
     }
 
     private var footer: some View {

@@ -35,7 +35,7 @@ final class PanelController {
     }
 
     private func makePanel() -> NSPanel {
-        let panel = NSPanel(
+        let panel = TranslationPanel(
             contentRect: NSRect(origin: .zero, size: PanelLayout.text.size),
             styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
             backing: .buffered,
@@ -44,6 +44,9 @@ final class PanelController {
         panel.level = .floating
         panel.isFloatingPanel = true
         panel.hidesOnDeactivate = false
+        // 只有点进译文才借键盘焦点（译文区是唯一说自己需要键盘的视图）：
+        // 点关闭、点重新翻译、拖着挪窝都不惊动前台 App。
+        panel.becomesKeyOnlyIfNeeded = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.backgroundColor = .clear
         panel.isOpaque = false
@@ -90,5 +93,23 @@ final class PanelController {
         origin.x = min(max(origin.x, visible.minX + 8), visible.maxX - panel.frame.width - 8)
         origin.y = min(max(origin.y, visible.minY + 8), visible.maxY - panel.frame.height - 8)
         panel.setFrameOrigin(origin)
+    }
+}
+
+/// 浮层这扇窗：无边框窗默认当不了 key 窗，当不了就没有键盘焦点——译文选中了也按不动 ⌘C。
+/// 允许成为 key，但配上 nonactivatingPanel + becomesKeyOnlyIfNeeded：借键盘不激活 App，
+/// 且只在用户点进译文时才借（气质准则「如行间注」——工具是配角，不打断手头的事）。
+private final class TranslationPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+
+    /// 菜单栏 App 没有编辑菜单可挂 ⌘C / ⌘A 的键盘等价物，自己送进响应链交给译文区。
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if super.performKeyEquivalent(with: event) { return true }
+        guard event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command else { return false }
+        switch event.charactersIgnoringModifiers {
+        case "c": return NSApp.sendAction(#selector(NSText.copy(_:)), to: nil, from: self)
+        case "a": return NSApp.sendAction(#selector(NSText.selectAll(_:)), to: nil, from: self)
+        default: return false
+        }
     }
 }
