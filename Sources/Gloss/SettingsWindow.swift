@@ -88,6 +88,18 @@ struct SettingsView: View {
                     modelRow(model: provider.model)
                 }
             }
+            Section("语言") {
+                Picker("原文", selection: $appState.sourceLanguage) {
+                    ForEach(Language.allCases) { language in
+                        Text(language.name).tag(language)
+                    }
+                }
+                Picker("译文", selection: $appState.targetLanguage) {
+                    ForEach(Language.targets) { language in
+                        Text(language.name).tag(language)
+                    }
+                }
+            }
             Section("快捷键") {
                 KeyboardShortcuts.Recorder("翻译剪贴板", name: .translateClipboard)
             }

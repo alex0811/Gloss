@@ -85,7 +85,7 @@ struct TranslationView: View {
         )
     }
 
-    /// 一行注一行：玻璃高度锚死在识别框上，只向右生长——中译英再长也压不到下一行，
+    /// 一行注一行：玻璃高度锚死在识别框上，只向右生长——译文再长也压不到下一行，
     /// 宽过图就缩字号、再不够就截断（完整译文下方一字不少）。
     /// 玻璃至少盖满整个识别框：原文被整行磨去，短译文旁不漏半截原文。
     private func glossLine(_ line: RecognizedLine, in imageSize: CGSize) -> some View {
@@ -182,7 +182,7 @@ struct TranslationView: View {
                 Label("重新翻译", systemImage: "arrow.triangle.2.circlepath")
             }
             .controlSize(.small)
-            .disabled(!state.hasNewClipboard)
+            .disabled(!state.isStale)
             Button(copied ? "已复制" : "复制译文") {
                 AppState.shared.copyTranslation()
                 copied = true

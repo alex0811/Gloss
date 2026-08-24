@@ -20,11 +20,14 @@ enum Translator {
         }
     }
 
-    private static let systemPrompt = """
-    你是一名专业译者，在中文与英文之间互译：原文以英文为主译成简体中文，以中文为主译成英文。\
-    只输出译文，不解释、不添加内容。保留原文的 Markdown 结构；代码块与行内代码原样保留不翻译；\
-    专有名词与技术术语保持一致，必要时保留英文原词。译文忠实、简洁、通顺。
-    """
+    /// 计算属性而非常量：设置页刚改的语言，下一次翻译就作数。
+    private static var systemPrompt: String {
+        """
+        你是一名专业译者，\(LanguagePref.directive)。\
+        只输出译文，不解释、不添加内容。保留原文的 Markdown 结构；代码块与行内代码原样保留不翻译；\
+        专有名词与技术术语保持一致，必要时保留原文写法。译文忠实、简洁、通顺。
+        """
+    }
 
     private static func stream(
         text: String,
