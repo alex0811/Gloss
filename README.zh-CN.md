@@ -45,3 +45,7 @@ open dist/Gloss.app      # 日常使用
 - 划词翻译（需辅助功能权限，v2 再说）
 - 翻译历史、润色/总结
 - App 图标 .icns 生成（母版在 `Design/AppIcon.svg`）
+
+## 许可证
+
+[MIT](LICENSE) © ZhangFan

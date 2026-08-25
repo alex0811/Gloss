@@ -47,3 +47,7 @@ When the clipboard holds an image — a screenshot, a chat log, a picture from a
 - Translating a selection in place (needs the Accessibility permission — v2 at the earliest)
 - History, rewriting, summarizing
 - A generated `.icns` app icon (the master is `Design/AppIcon.svg`)
+
+## License
+
+[MIT](LICENSE) © ZhangFan
