@@ -1,45 +1,49 @@
 <p align="center">
-  <img src="Design/AppIcon.svg" width="128" alt="Gloss 图标：淡墨文本线之间，一条发光的金色注线">
+  <img src="Design/AppIcon.svg" width="128" alt="Gloss icon: a glowing golden gloss line between two faint lines of ink">
 </p>
 
 <h1 align="center">Gloss</h1>
 
-<p align="center">macOS 菜单栏翻译工具：复制文本或图片 → 全局热键（默认 ⌥⌘T）→ 浮层流式译文。</p>
+<p align="center">A macOS menu bar translator: copy text or an image → press the hotkey (⌥⌘T) → a floating panel streams the translation.</p>
 
-**gloss**，语言学术语「行间译注」——外语书页字里行间那行小字翻译；英语里同拼写的另一个词义是「光泽、润色」。图标画的就是它：两条淡墨文本线之间，一条发光的金色注线。项目气质见 [CLAUDE.md](CLAUDE.md)。
+<p align="center">English · <a href="README.zh-CN.md">简体中文</a></p>
 
-## 构建与运行
+A **gloss** is the line of small type written between the lines of a foreign text — an *interlinear gloss*, from Greek γλῶσσα, "tongue, language." The other word spelled the same way means shine, polish: translation and polish in one word. The icon draws exactly that — a glowing golden gloss line between two faint lines of ink. The five house rules are in [CLAUDE.md](CLAUDE.md) (Chinese).
+
+## Build and run
 
 ```bash
-swift run                # 开发运行
-Scripts/bundle.sh        # 打包 dist/Gloss.app
-open dist/Gloss.app      # 日常使用
+swift run                # develop
+Scripts/bundle.sh        # package dist/Gloss.app (ad-hoc signed)
+open dist/Gloss.app      # everyday use
 ```
 
-也可用 Xcode 直接打开 `Package.swift` 调试。
+Requires macOS 14+ and a Swift 6 toolchain (Xcode 16+). You can also open `Package.swift` in Xcode directly.
 
-## 配置
+## Configure
 
-菜单栏图标 →「设置…」：
+Menu bar icon → 「设置…」 (Settings — the app's own UI is Chinese for now):
 
-- **Base URL / 模型**：任何 OpenAI 兼容服务（DeepSeek、OpenAI、Ollama、中转站……），即存即用
-- **API Key**：点「保存」存入 Keychain，不落明文文件
-- **语言**：只设「译成什么」，默认简体中文。原文是什么语种不必交代——模型自己认得，多说一句反而限制它
-- **快捷键**：可重新录制，默认 ⌥⌘T
-- **图片翻译显示原图**：开 = 原图按原尺寸铺开、按原位叠加译文，浮层随图撑大；关 = 只看译文
+- **Base URL / model** — any OpenAI-compatible service (DeepSeek, OpenAI, Ollama, a relay…), saved as you type. Keep several providers side by side and switch between them from the menu bar.
+- **API key** — press 「保存」 (Save) and it goes into the Keychain, never into a plaintext file.
+- **Language** — you set only *what to translate into*; Simplified Chinese by default. The source language is never declared: the model recognizes it on its own, and naming it would only constrain it.
+- **Hotkey** — re-recordable, ⌥⌘T by default.
+- **「图片翻译显示原图」** (show the source image) — on: the picture is laid out at natural size with the translation overlaid line by line, and the panel grows to fit; off: translation only.
 
-## 使用
+Zero system permissions — no Accessibility, no Screen Recording, no Full Disk Access.
 
-复制文本或图片，按热键。浮层出现在鼠标附近，边翻边显示；译成设置里选定的语言（默认简体中文），原文什么语种由模型自己认，代码块不翻。
-复制的是图片（截图、聊天记录、网页图片）时，浮层先亮出原图，同时用系统 Vision 在本地识别出文字和每行位置（语种由 Vision 自动判）——零权限、零费用；再按行号整段翻译，译文逐行叠回原图的原位，一行注一行，随流式输出一行行亮起来，正是行间注的样子。原图按原尺寸显示（就是它在屏幕上原本的大小，不缩不放），浮层跟着图自动撑大；图大到屏幕八成封顶时，再在图区里横竖滚动看。译文只向右生长，不会压到下一行；图上放不下的长句在下方内容区一字不少，可读可复制。不想看图可在设置里关掉「图片翻译显示原图」，只看译文。
+## Use
 
-换语言：设置里改「译成」，浮层上眼下这份原文立刻按新语言重翻，不必按任何确认——翻的是屏幕上这段，不是剪贴板此刻的内容；图片连识别都不重跑（行还在，只是换门语言再发一次）。
+Copy text or an image, press the hotkey. The panel opens near the pointer and fills in as it streams, translating into the language set in Settings (Simplified Chinese by default); the source language is left to the model, and code blocks are left alone.
 
-关闭浮层：再按一次热键 / 右上角 ×（浮层常驻，点外部不收起，方便边看译文边干别的）。
-浮层是非激活面板，不抢当前 App 的焦点——因此 **Esc 不关闭浮层**（按键根本到不了它），这是设计选择而非缺陷。
+When the clipboard holds an image — a screenshot, a chat log, a picture from a web page — the panel shows the picture first while Apple's Vision framework reads the text and the position of every line, locally: no permissions, no cost, and Vision decides the language itself. Those lines then go out as one numbered batch and come back onto the picture in place, each translation over its own line, lighting up row by row as the stream arrives. That is the interlinear gloss, literally. The image is shown at natural size — exactly as large as it was on screen, neither scaled up nor down — and the panel grows with it; at 80% of the screen's visible area it stops growing and the image area scrolls instead. A translated line only grows rightward, so it never covers the line below; anything too long for the picture is repeated in full in the content area underneath, readable and selectable. Turn off 「图片翻译显示原图」 if you only want the text.
 
-## v1 边界（有意不做）
+**Changing the language:** pick another target in Settings and the text on the panel is re-translated at once, no confirmation needed. It re-translates what is on screen, not whatever the clipboard holds by now; for an image, recognition doesn't run again — the lines are still there, they just go out once more in another language.
 
-- 划词翻译（需辅助功能权限，v2 再说）
-- 翻译历史、润色/总结
-- App 图标 .icns 生成（母版在 `Design/AppIcon.svg`）
+**Closing the panel:** press the hotkey again, or click × in the top-right corner. The panel stays put — clicking outside doesn't dismiss it, so you can keep the translation open while you work. It is a non-activating panel and never takes focus from the app in front, which is why **Esc doesn't close it**: the key never reaches it. A choice, not a defect.
+
+## v1 boundaries (deliberately left out)
+
+- Translating a selection in place (needs the Accessibility permission — v2 at the earliest)
+- History, rewriting, summarizing
+- A generated `.icns` app icon (the master is `Design/AppIcon.svg`)
