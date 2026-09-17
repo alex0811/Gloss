@@ -1,0 +1,60 @@
+# 推一个 v* tag 即发版：在干净的 macOS 机器上跑和本地同一条 Scripts/bundle.sh，打 zip，建 Release。
+# 版本号只从 tag 来（v0.1.0 → 0.1.0），Info.plist 不再硬编码。
+# 手动触发（Actions 页 Run workflow）只构建、把 zip 挂成 artifact，不建 Release：发版前先看 CI 能不能打出包。
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 构建号 = 提交数，需要完整历史
+
+      - name: Version
+        # tag 触发取 tag；手动触发没有 tag，记作 0.0.0（bundle.sh 的默认）
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          else
+            echo "VERSION=0.0.0" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build Gloss.app
+        run: Scripts/bundle.sh "$VERSION"
+
+      - name: Zip
+        run: |
+          # ditto 保留签名与扩展属性；zip 命令会弄坏 .app 里的签名
+          ditto -c -k --keepParent dist/Gloss.app "Gloss-$VERSION.zip"
+          shasum -a 256 "Gloss-$VERSION.zip" > "Gloss-$VERSION.zip.sha256"
+
+      - name: Upload artifact
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Gloss-${{ env.VERSION }}
+          path: Gloss-${{ env.VERSION }}.zip
+
+      - name: Publish release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<NOTES
+          下载 \`Gloss-$VERSION.zip\`，解压后把 Gloss.app 拖进「应用程序」。需要 macOS 14+，Apple 芯片与 Intel 通用。
+
+          应用未经 Apple 公证，首次打开会被系统拦下，放行方法见 README 的[安装](https://github.com/${GITHUB_REPOSITORY}/blob/main/README.zh-CN.md#安装)一节。
+
+          Download \`Gloss-$VERSION.zip\`, unzip, and drag Gloss.app into Applications. Requires macOS 14+, universal (Apple silicon and Intel). The app is not notarized; see [Install](https://github.com/${GITHUB_REPOSITORY}#install) in the README for how to open it the first time.
+          NOTES
+          gh release create "$GITHUB_REF_NAME" "Gloss-$VERSION.zip" "Gloss-$VERSION.zip.sha256" \
+            --title "Gloss $VERSION" --notes-file notes.md --generate-notes

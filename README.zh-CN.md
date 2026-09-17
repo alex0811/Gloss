@@ -6,19 +6,33 @@
 
 <p align="center">macOS 菜单栏翻译工具：复制文本或图片 → 全局热键（默认 ⌥⌘T）→ 浮层流式译文。</p>
 
+<p align="center"><a href="https://github.com/alex0811/Gloss/releases/latest">下载</a></p>
+
 <p align="center"><a href="README.md">English</a> · 简体中文</p>
 
 **gloss**，语言学术语「行间译注」——外语书页字里行间那行小字翻译；英语里同拼写的另一个词义是「光泽、润色」。图标画的就是它：两条淡墨文本线之间，一条发光的金色注线。项目气质见 [CLAUDE.md](CLAUDE.md)。
+
+## 安装
+
+从 [最新 Release](https://github.com/alex0811/Gloss/releases/latest) 下载 `Gloss-x.y.z.zip`，解压后把 Gloss.app 拖进「应用程序」。需要 macOS 14+，Apple 芯片与 Intel 通用。
+
+Gloss 没有经过 Apple 公证（公证需要付费开发者账号），第一次打开会被系统拦下：
+
+- **macOS 15 及以后**：先双击打开一次、关掉提示，再去「系统设置 → 隐私与安全性」，拉到下方，点 Gloss 旁边的「仍要打开」
+- **macOS 14**：右键 Gloss.app →「打开」→「打开」
+- **或者在终端里**：`xattr -dr com.apple.quarantine /Applications/Gloss.app`
+
+应用是 ad-hoc 签名，装了新版本后系统可能询问是否允许 Gloss 访问 Keychain 里的 API Key，点「始终允许」即可。
 
 ## 构建与运行
 
 ```bash
 swift run                # 开发运行
-Scripts/bundle.sh        # 打包 dist/Gloss.app
+Scripts/bundle.sh        # 打包 dist/Gloss.app（通用二进制、ad-hoc 签名、图标由 Design/AppIcon.svg 现生成）
 open dist/Gloss.app      # 日常使用
 ```
 
-需要 macOS 14+ 与 Swift 6 工具链（Xcode 16+）。也可用 Xcode 直接打开 `Package.swift` 调试。
+需要 macOS 14+ 与 Xcode 16+（打包走 `xcodebuild`，只装命令行工具不够）。也可用 Xcode 直接打开 `Package.swift` 调试。
 
 ## 配置
 
@@ -45,7 +59,6 @@ open dist/Gloss.app      # 日常使用
 
 - 划词翻译（需辅助功能权限，v2 再说）
 - 翻译历史、润色/总结
-- App 图标 .icns 生成（母版在 `Design/AppIcon.svg`）
 
 ## 许可证
 

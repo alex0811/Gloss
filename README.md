@@ -6,19 +6,33 @@
 
 <p align="center">A macOS menu bar translator: copy text or an image → press the hotkey (⌥⌘T) → a floating panel streams the translation.</p>
 
+<p align="center"><a href="https://github.com/alex0811/Gloss/releases/latest">Download</a></p>
+
 <p align="center">English · <a href="README.zh-CN.md">简体中文</a></p>
 
 A **gloss** is the line of small type written between the lines of a foreign text — an *interlinear gloss*, from Greek γλῶσσα, "tongue, language." The other word spelled the same way means shine, polish: translation and polish in one word. The icon draws exactly that — a glowing golden gloss line between two faint lines of ink. The five house rules are in [CLAUDE.md](CLAUDE.md) (Chinese).
+
+## Install
+
+Download `Gloss-x.y.z.zip` from the [latest release](https://github.com/alex0811/Gloss/releases/latest), unzip it, and drag Gloss.app into Applications. Requires macOS 14+; the build is universal (Apple silicon and Intel).
+
+Gloss is not notarized by Apple (that needs a paid developer account), so macOS blocks it the first time:
+
+- **macOS 15 and later:** open Gloss once and dismiss the warning, then go to System Settings → Privacy & Security, scroll down, and click 「Open Anyway」 next to Gloss.
+- **macOS 14:** right-click Gloss.app → Open → Open.
+- **Or in Terminal:** `xattr -dr com.apple.quarantine /Applications/Gloss.app`
+
+The app is ad-hoc signed, so after installing a new version macOS may ask whether Gloss can access its API key in the Keychain. Click 「Always Allow」.
 
 ## Build and run
 
 ```bash
 swift run                # develop
-Scripts/bundle.sh        # package dist/Gloss.app (ad-hoc signed)
+Scripts/bundle.sh        # package dist/Gloss.app (universal, ad-hoc signed, icon from Design/AppIcon.svg)
 open dist/Gloss.app      # everyday use
 ```
 
-Requires macOS 14+ and a Swift 6 toolchain (Xcode 16+). You can also open `Package.swift` in Xcode directly.
+Requires macOS 14+ and Xcode 16+ (packaging uses `xcodebuild`, so the Command Line Tools alone are not enough). You can also open `Package.swift` in Xcode directly.
 
 ## Configure
 
@@ -47,7 +61,6 @@ When the clipboard holds an image — a screenshot, a chat log, a picture from a
 
 - Translating a selection in place (needs the Accessibility permission — v2 at the earliest)
 - History, rewriting, summarizing
-- A generated `.icns` app icon (the master is `Design/AppIcon.svg`)
 
 ## License
 
