@@ -11,6 +11,9 @@ final class PanelController {
     private var panel: NSPanel?
     private var sizeCancellable: AnyCancellable?
     private var notificationTokens: [NSObjectProtocol] = []
+    /// 调度中心里选中浮层后临时置顶的起始时刻，nil 即没在置顶；去了别的 App 即解除。见 holdOnTopWhenChosen。
+    private var heldSince: Date?
+    private var releaseMonitor: Any?
 
     var isVisible: Bool { panel?.isVisible ?? false }
 
@@ -41,11 +44,12 @@ final class PanelController {
 
     func hide() {
         panel?.orderOut(nil)
+        setHeldOnTop(false)
     }
 
     /// 置顶浮在所有窗之上；不置顶就是普通窗，切到别的 App，它的窗照常盖过来。
-    func setPinned(_ pinned: Bool) {
-        panel?.level = pinned ? .floating : .normal
+    func pinnedChanged() {
+        applyLevel()
     }
 
     private func makePanel() -> NSPanel {
@@ -55,7 +59,7 @@ final class PanelController {
             backing: .buffered,
             defer: false
         )
-        panel.level = AppState.shared.isPinned ? .floating : .normal
+        panel.level = level
         panel.hidesOnDeactivate = false
         // 只有点进译文才借键盘焦点（译文区是唯一说自己需要键盘的视图）：
         // 点关闭、点重新翻译、拖着挪窝都不惊动前台 App。
@@ -73,7 +77,7 @@ final class PanelController {
         let container = ResizableContainerView(content: hostingView)
         container.onResizeEnd = { [weak self] in self?.rememberTextSize() }
         panel.contentView = container
-        keepFrontAfterMissionControl()
+        holdOnTopWhenChosen()
         return panel
     }
 
@@ -93,37 +97,63 @@ final class PanelController {
         keepOnScreen(panel)
     }
 
-    /// 在调度中心（Mission Control）里选中浮层，系统会激活 Gloss、把浮层提到最前，
-    /// 可约 0.25 秒后（实测 0.22–0.27 秒，退场动画收尾时）又把前台还给先前的 App，那边的窗随之盖回来。
-    /// 探针里单纯激活一个只有 nonactivatingPanel 的 accessory App，前台并不会被还回去，
-    /// 所以还前台的是调度中心那一侧，拦不住，只能跟着再提一次。
-    /// 判据：Gloss 刚被激活后不久，别的 App 在没有按着鼠标的情况下被激活——这不是用户点过去的。
-    /// 用户自己点别的 App 时鼠标正按着，浮层照常被盖住。
-    private func keepFrontAfterMissionControl() {
-        let window: TimeInterval = 0.6
-        var activatedAt: Date?
+    /// 在调度中心（Mission Control）里选中浮层，系统会激活 Gloss、让浮层成为 key 窗、提到最前，
+    /// 可退场时又把前台还给先前的 App，还会反复重排那边的窗，普通层级的浮层随即被盖回去。
+    /// 实测跟着再提一次抢不过：提完 15 毫秒又被盖上，之后没有任何激活通知可接。
+    /// 所以不跟时机较劲：Gloss 被激活时浮层正是 key 窗，就是用户刚选中了它，临时置顶，
+    /// 系统怎么重排普通窗都盖不住；等用户去了别的 App，恢复普通层级，那边的窗照常盖上来。
+    ///
+    /// 「去了别的 App」有两个信号，缺一不可：
+    /// - 点别的 App：全局鼠标监听收得到。
+    /// - 调度中心里选别的 App、⌘Tab：这些点击和按键到不了 Gloss，只能看激活通知。
+    ///   可系统还前台本身也是一次激活（实测选中后 0.22–0.3 秒），所以置顶满 1 秒之后的激活才算用户去了别处。
+    private func holdOnTopWhenChosen() {
         notificationTokens.append(NotificationCenter.default.addObserver(
             forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
-        ) { _ in
-            activatedAt = Date()
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, let panel = self.panel, panel.isVisible, panel.isKeyWindow else { return }
+                self.setHeldOnTop(true)
+            }
         })
         notificationTokens.append(NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
         ) { [weak self] note in
             let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
-            guard app != .current,
-                  let since = activatedAt, Date().timeIntervalSince(since) < window,
-                  NSEvent.pressedMouseButtons == 0
-            else { return }
-            activatedAt = nil
-            // 那边的窗在激活通知之后才提上来，排到下一拍再提浮层
-            DispatchQueue.main.async {
-                MainActor.assumeIsolated {
-                    guard let panel = self?.panel, panel.isVisible else { return }
-                    panel.orderFrontRegardless()
-                }
+            MainActor.assumeIsolated {
+                guard let self, app != .current,
+                      let since = self.heldSince, Date().timeIntervalSince(since) > 1
+                else { return }
+                self.setHeldOnTop(false)
             }
         })
+    }
+
+    private func setHeldOnTop(_ held: Bool) {
+        heldSince = held ? Date() : nil
+        applyLevel()
+        if held, releaseMonitor == nil {
+            // 全局监听只收发给别的 App 的点击，点浮层自己不算；只听鼠标，不需要辅助功能权限
+            releaseMonitor = NSEvent.addGlobalMonitorForEvents(
+                matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.setHeldOnTop(false)
+                }
+            }
+        } else if !held, let releaseMonitor {
+            NSEvent.removeMonitor(releaseMonitor)
+            self.releaseMonitor = nil
+        }
+    }
+
+    /// 层级只在这里定：置顶开关或临时置顶任一成立就浮在最上，否则是普通窗。
+    private var level: NSWindow.Level {
+        AppState.shared.isPinned || heldSince != nil ? .floating : .normal
+    }
+
+    private func applyLevel() {
+        panel?.level = level
     }
 
     /// 布局变了（换图、设置页切开关），正显示的浮层跟着变大小。
@@ -187,3 +217,4 @@ private final class TranslationPanel: NSPanel {
         }
     }
 }
+

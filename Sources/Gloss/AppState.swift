@@ -56,7 +56,7 @@ final class AppState: ObservableObject {
     @Published private(set) var hasNewClipboard = false
     /// 浮层置顶：浮在所有窗之上，不被切过去的 App 盖住。只管这一次弹出：浮层收起就取消，下次弹出照旧是普通窗。
     @Published var isPinned = false {
-        didSet { panel.setPinned(isPinned) }
+        didSet { panel.pinnedChanged() }
     }
     /// 浮层此刻的布局：视图和面板都读它。跟着 sourceImage / showsSourceImage 变，不单独手改。
     @Published private(set) var layout: PanelLayout = .text
