@@ -10,6 +10,7 @@ import SwiftUI
 final class PanelController {
     private var panel: NSPanel?
     private var sizeCancellable: AnyCancellable?
+    private var notificationTokens: [NSObjectProtocol] = []
 
     var isVisible: Bool { panel?.isVisible ?? false }
 
@@ -72,6 +73,7 @@ final class PanelController {
         let container = ResizableContainerView(content: hostingView)
         container.onResizeEnd = { [weak self] in self?.rememberTextSize() }
         panel.contentView = container
+        keepFrontAfterMissionControl()
         return panel
     }
 
@@ -89,6 +91,39 @@ final class PanelController {
         panel.setContentSize(size)
         panel.setFrameTopLeftPoint(topLeft)
         keepOnScreen(panel)
+    }
+
+    /// 在调度中心（Mission Control）里选中浮层，系统会激活 Gloss、把浮层提到最前，
+    /// 可约 0.25 秒后（实测 0.22–0.27 秒，退场动画收尾时）又把前台还给先前的 App，那边的窗随之盖回来。
+    /// 探针里单纯激活一个只有 nonactivatingPanel 的 accessory App，前台并不会被还回去，
+    /// 所以还前台的是调度中心那一侧，拦不住，只能跟着再提一次。
+    /// 判据：Gloss 刚被激活后不久，别的 App 在没有按着鼠标的情况下被激活——这不是用户点过去的。
+    /// 用户自己点别的 App 时鼠标正按着，浮层照常被盖住。
+    private func keepFrontAfterMissionControl() {
+        let window: TimeInterval = 0.6
+        var activatedAt: Date?
+        notificationTokens.append(NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { _ in
+            activatedAt = Date()
+        })
+        notificationTokens.append(NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
+        ) { [weak self] note in
+            let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            guard app != .current,
+                  let since = activatedAt, Date().timeIntervalSince(since) < window,
+                  NSEvent.pressedMouseButtons == 0
+            else { return }
+            activatedAt = nil
+            // 那边的窗在激活通知之后才提上来，排到下一拍再提浮层
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let panel = self?.panel, panel.isVisible else { return }
+                    panel.orderFrontRegardless()
+                }
+            }
+        })
     }
 
     /// 布局变了（换图、设置页切开关），正显示的浮层跟着变大小。
