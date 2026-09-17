@@ -82,7 +82,7 @@ Gloss 没有经过 Apple 公证（公证需要付费开发者账号），第一�
 
 ```bash
 swift run                # 开发运行
-Scripts/bundle.sh        # 打包 dist/Gloss.app（通用二进制、ad-hoc 签名、图标由 Design/AppIcon.svg 现生成）
+Scripts/bundle.sh        # 打包 dist/Gloss.app（通用二进制、ad-hoc 签名（设了 GLOSS_SIGN_IDENTITY 则用该证书）、图标由 Design/AppIcon.svg 现生成）
 open dist/Gloss.app      # 日常使用
 ```
 

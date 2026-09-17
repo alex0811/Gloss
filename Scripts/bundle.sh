@@ -1,6 +1,7 @@
 #!/bin/bash
-# 打包 Gloss.app：xcodebuild 通用二进制 + 手工组装 bundle + adhoc 签名。
+# 打包 Gloss.app：xcodebuild 通用二进制 + 手工组装 bundle + 签名（默认 adhoc）。
 # 用法：Scripts/bundle.sh [版本号]   版本号不带 v；省略时取最近的 v* tag，没有 tag 记作 0.0.0。
+# 环境变量 GLOSS_SIGN_IDENTITY：设了就用这张证书签（只给本机日常打包用），不设即 adhoc（CI 发版走这条）。
 # 本地日常用和 GitHub Release 发出去的是同一条路径，本机试过的就是别人下到的。
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -50,6 +51,9 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-codesign --force --deep --sign - "$APP"
+# adhoc 签名的 designated requirement 是二进制哈希，每次打包都变，Keychain 认不出是同一个 App，
+# 于是每次都弹窗要密码。证书签名的 requirement 是「bundle ID + 证书」，重打包不变，点过一次「始终允许」就不再问。
+SIGN_IDENTITY="${GLOSS_SIGN_IDENTITY:--}"
+codesign --force --deep --sign "$SIGN_IDENTITY" "$APP"
 codesign --verify --deep --strict "$APP"
-echo "✓ 已生成 ${APP}（版本 ${VERSION}，构建号 ${BUILD_NUMBER}，$(lipo -archs "$APP/Contents/MacOS/Gloss")）"
+echo "✓ 已生成 ${APP}（版本 ${VERSION}，构建号 ${BUILD_NUMBER}，$(lipo -archs "$APP/Contents/MacOS/Gloss")，签名 ${GLOSS_SIGN_IDENTITY:-adhoc}）"

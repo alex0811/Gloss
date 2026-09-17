@@ -82,7 +82,7 @@ Menu bar icon → 「设置…」 (Settings; the app's own UI is Chinese for now
 
 ```bash
 swift run                # develop
-Scripts/bundle.sh        # package dist/Gloss.app (universal, ad-hoc signed, icon rendered from Design/AppIcon.svg)
+Scripts/bundle.sh        # package dist/Gloss.app (universal, ad-hoc signed unless GLOSS_SIGN_IDENTITY names a certificate, icon rendered from Design/AppIcon.svg)
 open dist/Gloss.app      # everyday use
 ```
 
