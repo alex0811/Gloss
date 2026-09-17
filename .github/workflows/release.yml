@@ -15,7 +15,7 @@ jobs:
   release:
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # 构建号 = 提交数，需要完整历史
 
@@ -39,7 +39,7 @@ jobs:
 
       - name: Upload artifact
         if: github.ref_type != 'tag'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Gloss-${{ env.VERSION }}
           path: Gloss-${{ env.VERSION }}.zip
