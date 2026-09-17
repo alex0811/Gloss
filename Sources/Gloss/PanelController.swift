@@ -4,6 +4,7 @@ import SwiftUI
 
 /// 非激活浮动面板：不抢当前 App 的焦点（气质准则「如行间注」）。
 /// 常驻：点击其他地方不收起。关闭方式：再按一次热键 / 浮层右上角 ×。
+/// 拖边缘调大小；文本模式调好的大小记下来，下次照此弹出。
 @MainActor
 final class PanelController {
     private var panel: NSPanel?
@@ -52,16 +53,29 @@ final class PanelController {
         panel.isOpaque = false
         panel.hasShadow = true
         panel.isMovableByWindowBackground = true
-        panel.contentView = NSHostingView(rootView: TranslationView())
+        let hostingView = NSHostingView(rootView: TranslationView())
+        // 窗口大小归窗口管：不让 SwiftUI 内容的理想尺寸反过来钉住窗口，拖边缘才拖得动
+        hostingView.sizingOptions = []
+        // 不用 .resizable：系统给无边框窗的缩放没有光标、不认下限，见 ResizableContainerView
+        BackgroundCursor.enable()
+        let container = ResizableContainerView(content: hostingView)
+        container.onResizeEnd = { [weak self] in self?.rememberTextSize() }
+        panel.contentView = container
         return panel
     }
 
-    /// 尺寸的唯一事实在 PanelLayout，这里只负责把它落到 NSPanel 上。
+    /// 开场尺寸的唯一事实在 PanelLayout，这里只负责把它落到 NSPanel 上；之后用户怎么拖由窗口自己记着。
     /// 锚住左上角再改尺寸——setContentSize 锚的是左下，高度一变浮层就上蹿下跳；改完整体收回屏幕内。
+    /// 记下的尺寸可能来自一块更大的屏，放不下就先收到屏幕里。
     private func apply(_ layout: PanelLayout) {
         guard let panel else { return }
         let topLeft = NSPoint(x: panel.frame.minX, y: panel.frame.maxY)
-        panel.setContentSize(layout.size)
+        var size = layout.size
+        if let visible = (panel.screen ?? PanelScreen.current)?.visibleFrame {
+            size.width = max(min(size.width, visible.width - 16), PanelLayout.minSize.width)
+            size.height = max(min(size.height, visible.height - 16), PanelLayout.minSize.height)
+        }
+        panel.setContentSize(size)
         panel.setFrameTopLeftPoint(topLeft)
         keepOnScreen(panel)
     }
@@ -77,6 +91,12 @@ final class PanelController {
             .sink { [weak self] layout in
                 Task { @MainActor in self?.apply(layout) }
             }
+    }
+
+    /// 文本模式拖完才记；图片模式的大小跟着那张图走，不算用户的偏好。
+    private func rememberTextSize() {
+        guard let panel, AppState.shared.layout.image == nil else { return }
+        PanelLayout.textSize = panel.contentLayoutRect.size
     }
 
     /// 新弹出时出现在鼠标附近。

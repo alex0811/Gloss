@@ -28,6 +28,32 @@ final class SelectableTextView: NSTextView {
     /// 浮层不抢前台 App 的焦点，所以第一下点击就得直接开始选字，不能只用来「点亮窗口」
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
+    /// I 形光标：NSTextView 自带的走光标矩形，只在 key 窗里生效，浮层平时不是 key 窗，
+    /// 于是和缩放区一样靠常驻的鼠标跟踪自己设（后台设光标能生效的前提见 BackgroundCursor）。
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let own = iBeamTracking { removeTrackingArea(own) }
+        let area = NSTrackingArea(
+            rect: .zero,
+            options: [.mouseMoved, .mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            owner: self
+        )
+        addTrackingArea(area)
+        iBeamTracking = area
+    }
+
+    private var iBeamTracking: NSTrackingArea?
+
+    override func mouseMoved(with event: NSEvent) {
+        super.mouseMoved(with: event)
+        NSCursor.iBeam.set()
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        NSCursor.arrow.set()
+    }
+
     /// 装进滚动视图：宽度跟着浮层走、只在纵向长个儿，译文只换行不会横向溢出成一条长龙。
     static func scrollable() -> NSScrollView {
         let textView = SelectableTextView()

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 尺寸的唯一事实在 PanelLayout：视图与 NSPanel 都读 AppState.layout，这里不自己算大小。
+/// 视图铺满窗口，窗口多大由面板（开场按 PanelLayout，之后随用户拖）决定，这里不自己算大小。
 struct TranslationView: View {
     @ObservedObject var state = AppState.shared
     @State private var copied = false
@@ -8,8 +8,8 @@ struct TranslationView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
-            if let image = state.sourceImage, let area = state.layout.image {
-                stampedImage(image, in: area)
+            if let image = state.sourceImage, let content = state.layout.image {
+                stampedImage(image, content: content)
                 Divider()
             } else if state.sourceImage == nil, !state.sourceText.isEmpty {
                 Text(state.sourceText)
@@ -22,11 +22,7 @@ struct TranslationView: View {
             footer
         }
         .padding(PanelLayout.padding)
-        .frame(
-            width: state.layout.size.width,
-            height: state.layout.size.height,
-            alignment: .topLeading
-        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -56,28 +52,27 @@ struct TranslationView: View {
     }
 
     /// 原图即原文：按原尺寸铺开（不缩不放，就是它在屏幕上原本的大小），译文按识别位置逐行叠回图上，
-    /// 随流式输出一行行亮起来，恰是行间注的样子。浮层跟着图撑大；图大过屏幕封顶时才在图区里滚动。
+    /// 随流式输出一行行亮起来，恰是行间注的样子。浮层跟着图撑大；窗口装不下图时在图区里滚动。
     /// 完整译文仍在下方内容区，可读可复制。
-    private func stampedImage(_ image: NSImage, in area: PanelLayout.ImageArea) -> some View {
-        // 只有真的装不下的那一轴才开滚动，装得下的一轴不留橡皮筋回弹
-        var axes: Axis.Set = []
-        if area.content.width > area.viewport.width { axes.insert(.horizontal) }
-        if area.content.height > area.viewport.height { axes.insert(.vertical) }
-
-        return ScrollView(axes) {
+    /// 图区最多长到原图大小，窗口里多出来的地方先给它（layoutPriority），剩下的归译文区。
+    private func stampedImage(_ image: NSImage, content: CGSize) -> some View {
+        ScrollView([.horizontal, .vertical]) {
             ZStack(alignment: .topLeading) {
                 Image(nsImage: image)
                     .resizable()
-                    .frame(width: area.content.width, height: area.content.height)
+                    .frame(width: content.width, height: content.height)
                 ForEach(state.imageLines) { line in
-                    glossLine(line, in: area.content)
+                    glossLine(line, in: content)
                 }
             }
-            .frame(width: area.content.width, height: area.content.height, alignment: .topLeading)
+            .frame(width: content.width, height: content.height, alignment: .topLeading)
         }
+        // 装得下的那一轴不留橡皮筋回弹
+        .scrollBounceBehavior(.basedOnSize, axes: [.horizontal, .vertical])
         // 换一张图就回到左上角：浮层是常驻的，不重置会带着上一张的滚动位置开场
         .id(ObjectIdentifier(image))
-        .frame(width: area.viewport.width, height: area.viewport.height)
+        .frame(maxWidth: content.width, maxHeight: content.height, alignment: .topLeading)
+        .layoutPriority(1)
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -144,7 +139,7 @@ struct TranslationView: View {
             font: .systemFont(ofSize: failureMessage == nil ? 14 : 13),
             color: failureMessage == nil ? .labelColor : .systemRed
         )
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 48, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var failureMessage: String? {
