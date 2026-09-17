@@ -95,6 +95,34 @@ struct SettingsView: View {
                     }
                 }
             }
+            Section {
+                TextField(
+                    "翻译偏好",
+                    text: $appState.translationNotes,
+                    prompt: Text("如：我读的多是编程相关的英文。API、commit、PR、issue 等术语保留英文，其余按中文技术文档的习惯译。"),
+                    axis: .vertical
+                )
+                .labelsHidden()
+                .lineLimit(3...8)
+            } header: {
+                HStack {
+                    Text("翻译偏好")
+                    Spacer()
+                    Menu("预设") {
+                        ForEach(NotesPreset.allCases) { preset in
+                            Button(preset.name) { appState.translationNotes = preset.text }
+                        }
+                        Divider()
+                        Button("清空") { appState.translationNotes = "" }
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                }
+            } footer: {
+                Text("写给译者的话：常读什么领域、哪些词不译。预设只是起手稿，选中会替换框里的内容，之后照样可改。每次翻译都会带上，留空即不加。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             Section("快捷键") {
                 KeyboardShortcuts.Recorder("翻译剪贴板", name: .translateClipboard)
             }

@@ -34,13 +34,17 @@ final class AppState: ObservableObject {
             updateLayout()
         }
     }
-    /// 译成什么语言（默认见 LanguagePref）。设置页写它，翻译从 LanguagePref 读。
-    @Published var targetLanguage = LanguagePref.target {
+    /// 译成什么语言（默认见 TranslationPref）。设置页写它，翻译从 TranslationPref 读。
+    @Published var targetLanguage = TranslationPref.target {
         didSet {
             guard targetLanguage != oldValue else { return }
-            LanguagePref.target = targetLanguage
+            TranslationPref.target = targetLanguage
             targetLanguageChanged()
         }
+    }
+    /// 用户写给译者的偏好。即存即用，但不当场重翻：逐字在改，每敲一键重发一次请求不值当。
+    @Published var translationNotes = TranslationPref.notes {
+        didSet { TranslationPref.notes = translationNotes }
     }
     @Published var translation = ""
     /// 图片模式下的识别行；译文按行号回填进来，视图把每行叠回原图的识别位置。

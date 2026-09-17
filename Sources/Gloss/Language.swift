@@ -31,9 +31,11 @@ enum Language: String, CaseIterable, Identifiable {
     }
 }
 
-/// 目标语言的唯一出入口（nonisolated：翻译请求在后台读）。写只经 `AppState`。
-enum LanguagePref {
+/// 翻译偏好的唯一出入口（nonisolated：翻译请求在后台读）。写只经 `AppState`。
+/// 「译成什么」和「用户写给译者的话」都从这里进 prompt，文本与图片逐行两份 prompt 共用一个开头和结尾。
+enum TranslationPref {
     private static let targetKey = "targetLanguage"
+    private static let notesKey = "translationNotes"
     private static var defaults: UserDefaults { .standard }
 
     static var target: Language {
@@ -41,9 +43,59 @@ enum LanguagePref {
         set { defaults.set(newValue.rawValue, forKey: targetKey) }
     }
 
-    /// 「译成什么」全项目只说这一次：文本与图片逐行两份 prompt 都取它。
+    /// 用户自己写的翻译偏好：常读什么领域、哪些词保留原文。
+    /// 这是模型从一段原文里看不出来的事——「commit」「PR」单拎出来，它不知道你天天读代码。
+    static var notes: String {
+        get { defaults.string(forKey: notesKey) ?? "" }
+        set { defaults.set(newValue, forKey: notesKey) }
+    }
+
+    /// 两份 prompt 只各写自己的规矩（`rules`），角色、目标语言、用户偏好在这里拼一次。
     /// 原文是什么语种不必交代——模型自己认得，多说一句反而会限制它。
-    static var directive: String {
-        "不论原文是什么语种，一律译成\(target.name)"
+    /// 偏好放在最后并声明从属于规矩：用户写「多解释几句」也不该让图片逐行的行号格式散掉。
+    static func systemPrompt(rules: String) -> String {
+        var prompt = "你是一名专业译者，不论原文是什么语种，一律译成\(target.name)。\(rules)"
+        let notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !notes.isEmpty {
+            prompt += "\n\n以下是用户写给译者的翻译偏好，在不违背上述要求的前提下遵循：\n\(notes)"
+        }
+        return prompt
+    }
+}
+
+/// 翻译偏好的起手稿，不是另一种模式：选中只是把这段话填进输入框，prompt 永远只认输入框里的字。
+/// 于是「选了哪个预设」和「框里写了什么」不会是两份状态，填进去之后照样随手改。
+/// 措辞不写死「中文」：译成什么由 `TranslationPref.target` 说，预设只说领域的规矩。
+enum NotesPreset: String, CaseIterable, Identifiable {
+    case programming
+    case academic
+    case business
+    case casual
+
+    var id: String { rawValue }
+
+    var name: String {
+        switch self {
+        case .programming: "编程 / 技术"
+        case .academic: "学术论文"
+        case .business: "商务沟通"
+        case .casual: "日常口语"
+        }
+    }
+
+    var text: String {
+        switch self {
+        case .programming:
+            "我读的多是编程和软件开发相关的英文。API、SDK、commit、PR、issue、merge、branch、callback 等业界通用术语保留英文原文，不硬译；"
+                + "函数名、变量名、命令、报错信息原样保留。其余按技术文档的习惯译，简洁直白，不要翻译腔。"
+        case .academic:
+            "我读的多是学术论文。术语译法前后一致，专业术语首次出现时在译文后用括号附上原文；"
+                + "公式、引用标注、缩写原样保留；语气严谨客观，不增删论证。"
+        case .business:
+            "我读的多是工作邮件和商务沟通。保持原文的礼貌程度和语气；人名、公司名、日期、金额准确保留；"
+                + "译文自然得体，像母语者写的。"
+        case .casual:
+            "我读的多是社交媒体、聊天记录和日常对话。译得口语化、自然；俚语和网络用语按意思译，不逐字直译。"
+        }
     }
 }

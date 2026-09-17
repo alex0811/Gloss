@@ -27,6 +27,7 @@ Menu bar icon → 「设置…」 (Settings — the app's own UI is Chinese for 
 - **Base URL / model** — any OpenAI-compatible service (DeepSeek, OpenAI, Ollama, a relay…), saved as you type. Keep several providers side by side and switch between them from the menu bar.
 - **API key** — press 「保存」 (Save) and it goes into the Keychain, never into a plaintext file.
 - **Language** — you set only *what to translate into*; Simplified Chinese by default. The source language is never declared: the model recognizes it on its own, and naming it would only constrain it.
+- **Translation notes** — optional free text sent with every request, such as "I mostly read programming English; keep API, commit, PR and issue in English." A short snippet does not tell the model what you usually read, so you say it once here. The 「预设」 menu fills the box with a starting draft (programming, academic papers, business, casual) that you can then edit; the box is the only thing the prompt reads. The notes rank below the built-in rules, so they cannot break the line-number format used for images.
 - **Hotkey** — re-recordable, ⌥⌘T by default.
 - **「图片翻译显示原图」** (show the source image) — on: the picture is laid out at natural size with the translation overlaid line by line, and the panel grows to fit; off: translation only.
 
