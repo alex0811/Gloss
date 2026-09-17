@@ -5,7 +5,7 @@ struct TranslationView: View {
     @ObservedObject var state = AppState.shared
     @State private var copied = false
 
-    /// 金色注线的渐变（色板见 CLAUDE.md），注线和钉住的图钉共用。
+    /// 金色注线的渐变（色板见 CLAUDE.md），注线和置顶的图钉共用。
     private static let gold = [Color(red: 1.0, green: 0.886, blue: 0.62),
                                Color(red: 0.949, green: 0.659, blue: 0.231)]
 
@@ -44,7 +44,7 @@ struct TranslationView: View {
             Button {
                 state.isPinned.toggle()
             } label: {
-                // 钉住时染成注线的金色：一眼看得出这张浮层不会自己走
+                // 置顶时染成注线的金色：一眼看得出这张浮层浮在最上面
                 Image(systemName: state.isPinned ? "pin.fill" : "pin")
                     .font(.system(size: 10, weight: .semibold))
                     .rotationEffect(.degrees(45))
@@ -53,7 +53,7 @@ struct TranslationView: View {
                         : AnyShapeStyle(.secondary))
             }
             .buttonStyle(.plain)
-            .help(state.isPinned ? "取消钉住：点别处即收起" : "钉住：点别处不收起")
+            .help(state.isPinned ? "取消置顶" : "置顶：浮在所有窗口之上")
             Button {
                 AppState.shared.dismiss()
             } label: {

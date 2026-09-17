@@ -54,8 +54,10 @@ final class AppState: ObservableObject {
     @Published var status: Status = .idle
     /// 剪贴板出现了浮层尚未处理的新内容——「重新翻译」按钮亮起的依据。
     @Published private(set) var hasNewClipboard = false
-    /// 钉住的浮层点别处不收起。只管这一次弹出：浮层收起就松开，下次弹出照旧点外面即走。
-    @Published var isPinned = false
+    /// 浮层置顶：浮在所有窗之上，不被切过去的 App 盖住。只管这一次弹出：浮层收起就取消，下次弹出照旧是普通窗。
+    @Published var isPinned = false {
+        didSet { panel.setPinned(isPinned) }
+    }
     /// 浮层此刻的布局：视图和面板都读它。跟着 sourceImage / showsSourceImage 变，不单独手改。
     @Published private(set) var layout: PanelLayout = .text
 
@@ -133,10 +135,13 @@ final class AppState: ObservableObject {
         hasNewClipboard = true
     }
 
-    /// 热键是开关：浮层可见时按下即收起，否则翻译当前剪贴板。
+    /// 热键是开关：浮层露在外面时按下即收起。
+    /// 没露出来时：没显示，或被别的窗整个盖住却有新剪贴板，就翻译；被盖住而剪贴板没变，只把它亮出来，不重发请求。
     func hotkeyPressed() {
-        if panel.isVisible {
+        if panel.isExposed {
             dismiss()
+        } else if panel.isVisible && !hasNewClipboard {
+            panel.show()
         } else {
             translateClipboard()
         }

@@ -27,7 +27,7 @@ Copy. Press <kbd>⌥</kbd><kbd>⌘</kbd><kbd>T</kbd>. Read.
 
 A panel opens near the pointer and fills in as the model streams, into the language you chose (Simplified Chinese by default). The source language is never declared. The model recognizes it, and naming it would only constrain it. Code blocks are left as they are.
 
-The panel takes no focus, so the app in front of you never loses its place. Click outside and it goes. Pin it with the pin at the top right and it stays until you press the hotkey again or click ×. Esc does nothing, because Esc never reaches a panel that has no focus. That is a choice, not a defect.
+The panel takes no focus, so the app in front of you never loses its place. It is an ordinary window: switch to another app and that app's windows cover it, but it does not go away. To keep it above everything, pin it with the pin at the top right. Press the hotkey again, or ×, and it goes. Esc does nothing, because Esc never reaches a panel that has no focus. That is a choice, not a defect.
 
 Change the target language in Settings and the text on screen is translated again at once. The text on screen, not whatever the clipboard holds by now.
 

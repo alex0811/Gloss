@@ -3,13 +3,13 @@ import Combine
 import SwiftUI
 
 /// 非激活浮动面板：不抢当前 App 的焦点（气质准则「如行间注」）。
-/// 点别处即收起；钉住（右上角图钉）后常驻。另外两种关法：再按一次热键 / 浮层右上角 ×。
+/// 默认是普通层级的窗：切到别的 App 会被盖住，但不收起；右上角图钉置顶后浮在所有窗之上。
+/// 关法只有两种：浮层露在外面时再按一次热键 / 浮层右上角 ×。
 /// 拖边缘调大小；文本模式调好的大小记下来，下次照此弹出。
 @MainActor
 final class PanelController {
     private var panel: NSPanel?
     private var sizeCancellable: AnyCancellable?
-    private var outsideClickMonitor: Any?
 
     var isVisible: Bool { panel?.isVisible ?? false }
 
@@ -18,6 +18,12 @@ final class PanelController {
     var targetScreen: NSScreen? {
         if let panel, panel.isVisible { return panel.screen ?? PanelScreen.current }
         return PanelScreen.current
+    }
+
+    /// 浮层露没露出来：没显示、或被别的窗整个盖住都算没露。热键据此决定是收起还是先亮出来。
+    var isExposed: Bool {
+        guard let panel, panel.isVisible else { return false }
+        return panel.occlusionState.contains(.visible)
     }
 
     func show() {
@@ -30,30 +36,15 @@ final class PanelController {
             position(panel)
         }
         panel.orderFrontRegardless()
-        watchOutsideClicks()
     }
 
     func hide() {
         panel?.orderOut(nil)
-        if let outsideClickMonitor {
-            NSEvent.removeMonitor(outsideClickMonitor)
-            self.outsideClickMonitor = nil
-        }
     }
 
-    /// 浮层不激活 App，hidesOnDeactivate 派不上用场，点外面只能自己听。
-    /// 全局监听只收得到发给别的 App 的点击：点浮层自身、菜单栏图标、设置窗都不算外面。
-    /// 监听鼠标不需要辅助功能权限（键盘才要），零权限不破。
-    private func watchOutsideClicks() {
-        guard outsideClickMonitor == nil else { return }
-        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(
-            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
-        ) { _ in
-            Task { @MainActor in
-                guard !AppState.shared.isPinned else { return }
-                AppState.shared.dismiss()
-            }
-        }
+    /// 置顶浮在所有窗之上；不置顶就是普通窗，切到别的 App，它的窗照常盖过来。
+    func setPinned(_ pinned: Bool) {
+        panel?.level = pinned ? .floating : .normal
     }
 
     private func makePanel() -> NSPanel {
@@ -63,8 +54,7 @@ final class PanelController {
             backing: .buffered,
             defer: false
         )
-        panel.level = .floating
-        panel.isFloatingPanel = true
+        panel.level = AppState.shared.isPinned ? .floating : .normal
         panel.hidesOnDeactivate = false
         // 只有点进译文才借键盘焦点（译文区是唯一说自己需要键盘的视图）：
         // 点关闭、点重新翻译、拖着挪窝都不惊动前台 App。
@@ -142,6 +132,14 @@ final class PanelController {
 /// 且只在用户点进译文时才借（气质准则「如行间注」——工具是配角，不打断手头的事）。
 private final class TranslationPanel: NSPanel {
     override var canBecomeKey: Bool { true }
+
+    /// 被别的窗盖住一半时点它，要能把它提上来。Gloss 从不激活，系统不会替一个后台 App 的窗调整前后，自己提。
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .leftMouseDown || event.type == .rightMouseDown {
+            orderFrontRegardless()
+        }
+        super.sendEvent(event)
+    }
 
     /// 菜单栏 App 没有编辑菜单可挂 ⌘C / ⌘A 的键盘等价物，自己送进响应链交给译文区。
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
