@@ -54,6 +54,8 @@ final class AppState: ObservableObject {
     @Published var status: Status = .idle
     /// 剪贴板出现了浮层尚未处理的新内容——「重新翻译」按钮亮起的依据。
     @Published private(set) var hasNewClipboard = false
+    /// 钉住的浮层点别处不收起。只管这一次弹出：浮层收起就松开，下次弹出照旧点外面即走。
+    @Published var isPinned = false
     /// 浮层此刻的布局：视图和面板都读它。跟着 sourceImage / showsSourceImage 变，不单独手改。
     @Published private(set) var layout: PanelLayout = .text
 
@@ -254,6 +256,7 @@ final class AppState: ObservableObject {
     func dismiss() {
         streamTask?.cancel()
         panel.hide()
+        isPinned = false
     }
 
     func copyTranslation() {

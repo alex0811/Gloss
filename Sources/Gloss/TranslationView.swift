@@ -5,6 +5,10 @@ struct TranslationView: View {
     @ObservedObject var state = AppState.shared
     @State private var copied = false
 
+    /// 金色注线的渐变（色板见 CLAUDE.md），注线和钉住的图钉共用。
+    private static let gold = [Color(red: 1.0, green: 0.886, blue: 0.62),
+                               Color(red: 0.949, green: 0.659, blue: 0.231)]
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
@@ -34,12 +38,22 @@ struct TranslationView: View {
     private var header: some View {
         HStack {
             Capsule()
-                .fill(LinearGradient(
-                    colors: [Color(red: 1.0, green: 0.886, blue: 0.62),
-                             Color(red: 0.949, green: 0.659, blue: 0.231)],
-                    startPoint: .leading, endPoint: .trailing))
+                .fill(LinearGradient(colors: Self.gold, startPoint: .leading, endPoint: .trailing))
                 .frame(width: 22, height: 5)
             Spacer()
+            Button {
+                state.isPinned.toggle()
+            } label: {
+                // 钉住时染成注线的金色：一眼看得出这张浮层不会自己走
+                Image(systemName: state.isPinned ? "pin.fill" : "pin")
+                    .font(.system(size: 10, weight: .semibold))
+                    .rotationEffect(.degrees(45))
+                    .foregroundStyle(state.isPinned
+                        ? AnyShapeStyle(LinearGradient(colors: Self.gold, startPoint: .top, endPoint: .bottom))
+                        : AnyShapeStyle(.secondary))
+            }
+            .buttonStyle(.plain)
+            .help(state.isPinned ? "取消钉住：点别处即收起" : "钉住：点别处不收起")
             Button {
                 AppState.shared.dismiss()
             } label: {
@@ -69,7 +83,7 @@ struct TranslationView: View {
         }
         // 装得下的那一轴不留橡皮筋回弹
         .scrollBounceBehavior(.basedOnSize, axes: [.horizontal, .vertical])
-        // 换一张图就回到左上角：浮层是常驻的，不重置会带着上一张的滚动位置开场
+        // 换一张图就回到左上角：浮层开着时换图不重开窗，不重置会带着上一张的滚动位置开场
         .id(ObjectIdentifier(image))
         .frame(maxWidth: content.width, maxHeight: content.height, alignment: .topLeading)
         .layoutPriority(1)

@@ -3,12 +3,13 @@ import Combine
 import SwiftUI
 
 /// 非激活浮动面板：不抢当前 App 的焦点（气质准则「如行间注」）。
-/// 常驻：点击其他地方不收起。关闭方式：再按一次热键 / 浮层右上角 ×。
+/// 点别处即收起；钉住（右上角图钉）后常驻。另外两种关法：再按一次热键 / 浮层右上角 ×。
 /// 拖边缘调大小；文本模式调好的大小记下来，下次照此弹出。
 @MainActor
 final class PanelController {
     private var panel: NSPanel?
     private var sizeCancellable: AnyCancellable?
+    private var outsideClickMonitor: Any?
 
     var isVisible: Bool { panel?.isVisible ?? false }
 
@@ -29,10 +30,30 @@ final class PanelController {
             position(panel)
         }
         panel.orderFrontRegardless()
+        watchOutsideClicks()
     }
 
     func hide() {
         panel?.orderOut(nil)
+        if let outsideClickMonitor {
+            NSEvent.removeMonitor(outsideClickMonitor)
+            self.outsideClickMonitor = nil
+        }
+    }
+
+    /// 浮层不激活 App，hidesOnDeactivate 派不上用场，点外面只能自己听。
+    /// 全局监听只收得到发给别的 App 的点击：点浮层自身、菜单栏图标、设置窗都不算外面。
+    /// 监听鼠标不需要辅助功能权限（键盘才要），零权限不破。
+    private func watchOutsideClicks() {
+        guard outsideClickMonitor == nil else { return }
+        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+        ) { _ in
+            Task { @MainActor in
+                guard !AppState.shared.isPinned else { return }
+                AppState.shared.dismiss()
+            }
+        }
     }
 
     private func makePanel() -> NSPanel {
