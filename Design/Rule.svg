@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 28" width="160" height="28">
+  <!-- Gloss README 分节线 · 菜单栏图标的两元素构图（细文本线 + 短粗注线），居中。
+       淡墨与金色在 GitHub 亮色 / 暗色主题上都可见。 -->
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFE29E"/>
+      <stop offset="1" stop-color="#F2A83B"/>
+    </linearGradient>
+  </defs>
+  <rect x="0"  y="5"  width="160" height="3" rx="1.5" fill="#56648A" opacity="0.8"/>
+  <rect x="44" y="15" width="72"  height="8" rx="4"   fill="url(#gold)"/>
+</svg>
