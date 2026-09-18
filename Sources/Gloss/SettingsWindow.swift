@@ -126,8 +126,16 @@ struct SettingsView: View {
             Section("快捷键") {
                 KeyboardShortcuts.Recorder("翻译剪贴板", name: .translateClipboard)
             }
-            Section("显示") {
+            Section {
                 Toggle("图片翻译显示原图", isOn: $appState.showsSourceImage)
+                Toggle("译完附一句话总结", isOn: $appState.summarizes)
+            } header: {
+                Text("显示")
+            } footer: {
+                Text("长译文译完后，再请模型用一句话交代它整体在说什么，摆在译文上方（多一次请求）。"
+                     + "一眼看得完的短译文不总结。开关当场生效，不必重翻。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Section {
                 Text("名称、Base URL 与模型即存即用；API Key 在「保存」或刷新模型时存入 Keychain，"

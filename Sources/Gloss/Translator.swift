@@ -7,6 +7,16 @@ enum Translator {
         _ text: String,
         prompt: String = systemPrompt
     ) -> AsyncThrowingStream<String, Error> {
+        run(text: text, prompt: prompt)
+    }
+
+    /// 一句话总结走的是同一个客户端：同一份服务商配置、同一条 SSE 流，只换一份 prompt。
+    /// 不为它另起一个 client——换服务商仍然只是换配置。
+    static func summarize(_ text: String) -> AsyncThrowingStream<String, Error> {
+        run(text: text, prompt: Summary.prompt)
+    }
+
+    private static func run(text: String, prompt: String) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {

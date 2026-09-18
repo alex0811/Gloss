@@ -27,6 +27,8 @@ Copy. Press <kbd>⌥</kbd><kbd>⌘</kbd><kbd>T</kbd>. Read.
 
 A panel opens near the pointer and fills in as the model streams, into the language you chose (Simplified Chinese by default). The source language is never declared. The model recognizes it, and naming it would only constrain it. Code blocks are left as they are.
 
+When what you copied is already the language you want, the panel simply shows it back to you, says so, and sends no request at all. The check is local: first which script the words are written in, then the system language recognizer on which language that is. Both gates are strict, and both must agree. Translating something twice costs a request; mistaking a foreign text for one already translated costs you the translation.
+
 The panel takes no focus, so the app in front of you never loses its place. It is an ordinary window: switch to another app and that app's windows cover it, but it does not go away. To keep it above everything, pin it with the pin at the top right. Press the hotkey again, or ×, and it goes. Esc does nothing, because Esc never reaches a panel that has no focus. That is a choice, not a defect.
 
 Change the target language in Settings and the text on screen is translated again at once. The text on screen, not whatever the clipboard holds by now.
@@ -39,13 +41,19 @@ The panel shows the picture first. Apple's Vision framework reads the text on it
 
 The picture is shown at natural size, exactly as large as it was on screen. The panel grows with it, up to 80% of the screen, and scrolls after that. A translated line only grows rightward and never covers the line below. Anything too long for the picture is repeated in full underneath, selectable. Turn off 「图片翻译显示原图」 in Settings if you want the text alone.
 
+## One line
+
+When a translation runs long, one more line appears above it: a short gold rule, then a single sentence saying what the whole thing is about. Read that first, then decide whether to read the rest. A gloss on a gloss is still a gloss.
+
+It shows up only when the translation is too long to take in at a glance; short ones get nothing. It compresses the finished translation, never a half-streamed one, and is capped at three lines, so it cannot crowd out the text below it. If that one sentence fails, only that line turns grey and says why; the translation stays exactly as it was. Turn off 「译完附一句话总结」 in Settings — it takes effect at once, with no re-translation.
+
 ## What it leaves out
 
 - **No permissions.** No Accessibility, no Screen Recording, no Full Disk Access.
 - **One provider.** Any OpenAI-compatible endpoint: DeepSeek, OpenAI, Ollama, a relay. Changing service is changing a URL.
 - **No secrets on disk.** The API key lives in the Keychain, never in a plaintext file.
 - **No hidden errors.** When the network or the API fails, the panel says so. A gloss that hides the text is worse than none.
-- **Not in v1, on purpose.** Translating a selection in place (needs Accessibility), history, rewriting, summarizing.
+- **Not in v1, on purpose.** Translating a selection in place (needs Accessibility), history, rewriting.
 
 The five house rules behind these are in [CLAUDE.md](CLAUDE.md) (Chinese).
 
@@ -77,6 +85,7 @@ Menu bar icon → 「设置…」 (Settings; the app's own UI is Chinese for now
 - **Translation notes.** An optional paragraph sent with every request, such as "I mostly read programming English; keep API, commit, PR and issue in English." A short snippet cannot tell the model what you usually read, so you say it once here. The 「预设」 menu fills the box with a starting draft (programming, academic papers, business, casual) that you then edit; the box is the only thing the prompt reads. The notes rank below the built-in rules, so they cannot break the line-number format used for images.
 - **Hotkey.** Re-recordable, ⌥⌘T by default.
 - **「图片翻译显示原图」** (show the source image). On: the picture at natural size with the translation laid over it line by line. Off: translation only.
+- **「译完附一句话总结」** (a one-line summary). On: when a long translation finishes, one more request compresses it into a single sentence shown above the text. Short translations get none. On by default.
 
 ## Build
 

@@ -9,8 +9,10 @@ struct PanelLayout: Equatable {
     let image: CGSize?
 
     static let padding: CGFloat = 16
-    /// 拖小的下限：头部、一截译文和底部按钮还摆得下。
-    static let minSize = CGSize(width: 320, height: 200)
+    /// 拖小的下限：头部、一句话总结、一截译文、底部按钮同时在场也还摆得下。
+    /// 这个数是量出来的，不是估的：最窄宽度下总结至多三行占 59 点，加行距 69 点，原先的 200 正好不够，
+    /// 少了它按钮会被挤出窗外。浮层上能同时出现的块变了，这条线就得重量一次。
+    static let minSize = CGSize(width: 320, height: 270)
     /// 文本模式的出厂尺寸，也是图片模式宽度的下限（下方译文和按钮要地方）。
     private static let defaultTextSize = CGSize(width: 440, height: 320)
     /// 图区之外的固定开销：头部 + 分隔线 + 下方完整译文区 + 底部按钮 + 内边距。

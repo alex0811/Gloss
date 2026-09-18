@@ -15,16 +15,19 @@ struct TranslationView: View {
             if let image = state.sourceImage, let content = state.layout.image {
                 stampedImage(image, content: content)
                 Divider()
-            } else if state.sourceImage == nil, !state.sourceText.isEmpty {
+            } else if state.sourceImage == nil, !state.sourceText.isEmpty, !state.isPassthrough {
                 Text(state.sourceText)
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .lineLimit(3)
                 Divider()
             }
+            summaryLine
             content
             footer
         }
+        // 这一句是有是无，淡入淡出地换，不硬生生把下面的译文顶下去
+        .animation(.easeOut(duration: 0.22), value: hasSummary)
         .padding(PanelLayout.padding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -145,6 +148,38 @@ struct TranslationView: View {
         .offset(x: origin.x, y: origin.y)
     }
 
+    private var hasSummary: Bool { !state.summary.isEmpty || state.summaryFailure != nil }
+
+    /// 一句话总结：一条竖起来的金色注线领着，摆在完整译文的上方——
+    /// 正是行间注的关系，先扫一眼它说了什么，再决定要不要读全篇。译文仍是主，它压不住下面。
+    /// 至多三行：模型不守「一句话」的时候，也顶不掉译文的地方（结构上封死，不指望它听话）。
+    @ViewBuilder private var summaryLine: some View {
+        if hasSummary {
+            let failed = state.summaryFailure
+            HStack(alignment: .top, spacing: 8) {
+                Capsule()
+                    .fill(failed == nil
+                        ? AnyShapeStyle(LinearGradient(colors: Self.gold, startPoint: .top, endPoint: .bottom))
+                        : AnyShapeStyle(Color.secondary.opacity(0.35)))
+                    .frame(width: 3)
+                Text(failed ?? state.summary)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(failed == nil ? Color.primary : Color.secondary)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 7)
+            .padding(.horizontal, 8)
+            .background(
+                Color.primary.opacity(0.045),
+                in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+            )
+            .help(failed ?? state.summary)
+            .transition(.opacity.combined(with: .move(edge: .top)))
+        }
+    }
+
     /// 完整译文（出错时是错误原文，同一块地方、同样能选中带走——「不吞错误」）。
     /// 拖着鼠标就能框选一段，不必整段复制。
     private var content: some View {
@@ -176,13 +211,24 @@ struct TranslationView: View {
                 Text("翻译中…")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            case .summarizing:
+                ProgressView()
+                    .controlSize(.small)
+                Text("总结中…")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             case .failed(_, let showSettings):
                 if showSettings {
                     Button("打开设置") { SettingsWindowController.shared.show() }
                         .controlSize(.small)
                 }
             case .done, .idle:
-                EmptyView()
+                if state.isPassthrough {
+                    // 语言名从目标语言来，不写死：设置里换一门，这句话跟着换
+                    Text("原文已是\(state.targetLanguage.name)，未翻译")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
             Spacer()
             Button {
@@ -192,7 +238,7 @@ struct TranslationView: View {
             }
             .controlSize(.small)
             .disabled(!state.hasNewClipboard)
-            Button(copied ? "已复制" : "复制译文") {
+            Button(copied ? "已复制" : (state.isPassthrough ? "复制原文" : "复制译文")) {
                 AppState.shared.copyTranslation()
                 copied = true
                 Task {

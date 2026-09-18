@@ -17,6 +17,8 @@ final class AppState: ObservableObject {
         case idle
         case recognizing
         case streaming
+        /// 译文已完整，正在压那一句话。`.done` 才是真的全都完了。
+        case summarizing
         case done
         case failed(String, showSettings: Bool)
     }
@@ -34,6 +36,14 @@ final class AppState: ObservableObject {
             updateLayout()
         }
     }
+    /// 设置页开关：长译文译完后，再请模型压一句话摆在译文上方。默认开。
+    @Published var summarizes =
+        UserDefaults.standard.object(forKey: AppState.summarizesKey) as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(summarizes, forKey: Self.summarizesKey)
+            summarizesChanged()
+        }
+    }
     /// 译成什么语言（默认见 TranslationPref）。设置页写它，翻译从 TranslationPref 读。
     @Published var targetLanguage = TranslationPref.target {
         didSet {
@@ -47,6 +57,13 @@ final class AppState: ObservableObject {
         didSet { TranslationPref.notes = translationNotes }
     }
     @Published var translation = ""
+    /// 一句话总结。译文流完才有——压半截译文压出来的话不作数。
+    @Published private(set) var summary = ""
+    /// 总结失败只落在总结这一行：注写砸了不该把译好的正文一起换成红字。
+    @Published private(set) var summaryFailure: String?
+    /// 本地预检判定这段原文本就是目标语言，这一次没发请求——译文栏里摆的就是原文。
+    /// 浮层得说出这件事，不然「怎么一点没变」只能靠猜（气质准则「只 gloss，不 gloss over」）。
+    @Published private(set) var isPassthrough = false
     /// 图片模式下的识别行；译文按行号回填进来，视图把每行叠回原图的识别位置。
     @Published private(set) var imageLines: [RecognizedLine] = []
     /// 原图磨去墨迹只剩纸色的毛玻璃底板：译文行的玻璃从这上面对位取景。与 imageLines 同源同生命周期。
@@ -62,8 +79,11 @@ final class AppState: ObservableObject {
     @Published private(set) var layout: PanelLayout = .text
 
     private static let showsSourceImageKey = "showsSourceImage"
+    private static let summarizesKey = "summarizes"
 
     private let panel = PanelController()
+    /// 浮层此刻正在进行的那一次请求：翻译，或翻译之后接着跑的总结。
+    /// 两者先后不重叠，所以只有一个——要掐就是掐它，不必分头记两份。
     private var streamTask: Task<Void, Never>?
     /// 剪贴板版本号：轮询比对它，比内容哈希便宜也可靠。
     private var lastChangeCount = 0
@@ -101,6 +121,25 @@ final class AppState: ObservableObject {
         retranslateCurrent()
     }
 
+    /// 开关当场生效，不必重翻：眼下这份译文该有的总结补上，不该有的立刻收走。
+    /// 浮层没开着就什么都不做——没人在看的译文不值得多发一次请求。
+    private func summarizesChanged() {
+        guard panel.isVisible else { return }
+        guard summarizes else {
+            if status == .summarizing {
+                streamTask?.cancel()
+                status = .done
+            }
+            summary = ""
+            summaryFailure = nil
+            return
+        }
+        // 译文还在流就什么都不做：它流完自然接着总结。
+        // 这时候另起一个任务会把 streamTask 指走，正在流的译文就此失去被掐的把手。
+        guard status == .done else { return }
+        streamTask = Task { [weak self] in await self?.summarize() }
+    }
+
     /// 重翻眼下这份原文——不是剪贴板此刻的内容（那可能早换了）。
     /// 正因如此不碰 hasNewClipboard / lastChangeCount：等着被翻的新剪贴板还等着，按钮该亮照亮。
     private func retranslateCurrent() {
@@ -112,19 +151,47 @@ final class AppState: ObservableObject {
                 return line
             }
             imageLines = lines
-            restream { try await self.streamLines(lines) }
+            restream { self.translateLines(lines) }
         } else if !sourceText.isEmpty {
             let text = sourceText
-            restream { try await self.streamText(text) }
+            restream { self.translateText(text) }
         }
         // 识别还没出结果时两边都空：什么都不做——那次请求发出时自会用上新语言
     }
 
-    /// 掐掉正在流的那次，清空译文，从头再流一遍。
-    private func restream(_ work: @escaping @MainActor () async throws -> Void) {
+    /// 掐掉正在流的那次，清空译文，从头再走一遍入口。
+    /// 重来一遍走的是入口而非 `begin`：换了门语言，本地预检的答案也可能跟着翻面
+    /// （原文是中文，目标从中文改成英文，这一次就该真发请求了）。
+    private func restream(_ start: @MainActor () -> Void) {
         streamTask?.cancel()
+        clearResult()
+        start()
+    }
+
+    /// 文本这一路的唯一入口：本地预检说整段已经是目标语言，就地把原文交回去，一次请求都不发。
+    /// 判定挡在 `begin` 外面，不是挡在请求前面——不走那条路，「译完接着总结」的尾巴也就够不着：
+    /// 总结的对象是译文，而这里根本没有译文（`Summary.prompt` 开口就说「下面是一段译文」）。
+    private func translateText(_ text: String) {
+        guard !Precheck.isAlreadyTarget(text) else {
+            isPassthrough = true
+            translation = text
+            present(.done)
+            return
+        }
+        begin(.streaming) { try await self.streamText(text) }
+    }
+
+    /// 图片这一路的入口。识别出的行照旧整段发出：预检只管文字模式。
+    private func translateLines(_ lines: [RecognizedLine]) {
+        begin(.streaming) { try await self.streamLines(lines) }
+    }
+
+    /// 译文和它的那句总结是同一份结果，换就一起换：只清一半，浮层上就成了新原文配旧总结。
+    private func clearResult() {
         translation = ""
-        begin(.streaming, work)
+        summary = ""
+        summaryFailure = nil
+        isPassthrough = false
     }
 
     /// 只有「面板处理过之后又复制了新东西」才点亮按钮；自己写回的译文不算。
@@ -153,7 +220,7 @@ final class AppState: ObservableObject {
         sourceImage = nil
         imageLines = []
         frostedPlate = nil
-        translation = ""
+        clearResult()
         hasNewClipboard = false
         // 热键快过 0.5 秒的轮询时，这份剪贴板已经翻过了——不认领它，下一拍就会误亮「重新翻译」。
         lastChangeCount = NSPasteboard.general.changeCount
@@ -161,7 +228,7 @@ final class AppState: ObservableObject {
         switch Clipboard.read() {
         case .text(let text):
             sourceText = text
-            begin(.streaming) { try await self.streamText(text) }
+            translateText(text)
         case .image(let image):
             sourceImage = image
             begin(.recognizing) { try await self.recognizeThenStream(image) }
@@ -193,14 +260,45 @@ final class AppState: ObservableObject {
                 self?.status = .done
             } catch is CancellationError {
                 // 主动取消不算失败
+                return
             } catch let failure as Failure {
                 guard !Task.isCancelled else { return }
                 self?.status = .failed(failure.message, showSettings: failure.showSettings)
+                return
             } catch {
                 guard !Task.isCancelled else { return }
                 self?.status = .failed(error.localizedDescription, showSettings: true)
+                return
             }
+            // 译文齐了才轮到总结：同一个任务往下走，掐译文就等于连总结一起掐了
+            await self?.summarize()
         }
+    }
+
+    /// 总结只从这里开始：译文流完顺势往下走，或设置里刚打开开关时补一次。
+    /// 该不该总结的判据全写在这道 guard 上，两个入口共认这一份。
+    /// 不借道 `begin`：总结失败只该落在总结那一行——正文已经译好了，不能被一句注的失手顶掉。
+    private func summarize() async {
+        guard summarizes, status == .done, summary.isEmpty, summaryFailure == nil,
+              // 预检放行的那一次没有译文，摆着的是原文：压它等于让 prompt 里「下面是一段译文」说了假话
+              !isPassthrough,
+              Summary.deserves(translation)
+        else { return }
+        status = .summarizing
+        do {
+            for try await chunk in Translator.summarize(translation) {
+                guard !Task.isCancelled else { return }
+                // 顺手掐头去尾：模型爱在前面带个空行，带着它这一句就先空一行才开始
+                summary = (summary + chunk).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        } catch is CancellationError {
+            return
+        } catch {
+            guard !Task.isCancelled else { return }
+            summaryFailure = "总结失败：\(error.localizedDescription)"
+        }
+        guard !Task.isCancelled else { return }
+        status = .done
     }
 
     private func streamText(_ text: String) async throws {

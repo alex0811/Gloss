@@ -32,7 +32,8 @@ enum Language: String, CaseIterable, Identifiable {
 }
 
 /// 翻译偏好的唯一出入口（nonisolated：翻译请求在后台读）。写只经 `AppState`。
-/// 「译成什么」和「用户写给译者的话」都从这里进 prompt，文本与图片逐行两份 prompt 共用一个开头和结尾。
+/// 「译成什么」和「用户写给译者的话」都从这里进 prompt：文本、图片逐行两份翻译 prompt 共用开头，
+/// 再加上一句话总结（`Summary.prompt`），三份共用结尾那段用户偏好。
 enum TranslationPref {
     private static let targetKey = "targetLanguage"
     private static let notesKey = "translationNotes"
@@ -50,16 +51,19 @@ enum TranslationPref {
         set { defaults.set(newValue, forKey: notesKey) }
     }
 
-    /// 两份 prompt 只各写自己的规矩（`rules`），角色、目标语言、用户偏好在这里拼一次。
+    /// 两份翻译 prompt 只各写自己的规矩（`rules`），角色、目标语言在这里拼一次。
     /// 原文是什么语种不必交代——模型自己认得，多说一句反而会限制它。
-    /// 偏好放在最后并声明从属于规矩：用户写「多解释几句」也不该让图片逐行的行号格式散掉。
     static func systemPrompt(rules: String) -> String {
-        var prompt = "你是一名专业译者，不论原文是什么语种，一律译成\(target.name)。\(rules)"
+        withNotes("你是一名专业译者，不论原文是什么语种，一律译成\(target.name)。\(rules)")
+    }
+
+    /// 用户偏好统一缀在最后，并声明从属于上文的规矩：用户写「多解释几句」，
+    /// 既不该让图片逐行的行号格式散掉，也不该让一句话总结长成三句。
+    /// 翻译与总结（见 `Summary.prompt`）共用这条尾巴——偏好只有一份，说给谁听都一样。
+    static func withNotes(_ prompt: String) -> String {
         let notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !notes.isEmpty {
-            prompt += "\n\n以下是用户写给译者的翻译偏好，在不违背上述要求的前提下遵循：\n\(notes)"
-        }
-        return prompt
+        guard !notes.isEmpty else { return prompt }
+        return prompt + "\n\n以下是用户写给译者的翻译偏好，在不违背上述要求的前提下遵循：\n\(notes)"
     }
 }
 
